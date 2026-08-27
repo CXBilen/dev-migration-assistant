@@ -1,5 +1,10 @@
 # `.devbackup` container: encryption, framing and safe extraction
 
+> **Implementation note (2026-08-28):** the shipped v1 container (`packages/archive`, normative spec in
+> `docs/backup-format/DEVBACKUP_SPEC.md`) uses Argon2id **m = 64 MiB, t = 3, p = 4**, **1 MiB** chunks and **no
+> separate header MAC** — header integrity comes from `SHA-256(header) || chunk index` in every chunk's AAD. The
+> figures below are the research prototype's and are kept for the reasoning; where they differ, the spec wins.
+
 Design references for the encrypted, streamable `.devbackup` container used by Dev Migration Assistant.
 Researched 2026-08-27 against official sources (fetched via r.jina.ai) and verified with small Node.js
 prototypes on this machine (Apple M4, Node v22.22.3, `tar@7.5.22`, `hash-wasm@4.12.0`). Paths are
@@ -7,16 +12,16 @@ sanitized (`<user>`). Nothing here is secret.
 
 ## 0. Decisions at a glance
 
-| Topic | Decision | Why (short) |
-| --- | --- | --- |
-| Password KDF | Argon2id (v1.3 / 0x13) via `hash-wasm`, salt 16 B random, 32 B output | RFC 9106 + OWASP recommend Argon2id; hash-wasm is the fastest pure-WASM impl and needs no native build in Electron |
-| KDF params (default) | **m = 262144 KiB (256 MiB), t = 3, p = 4** (stored in header) | 0.45 s on M4; 4x RFC 9106 "second recommended" memory. Floor accepted on read: m >= 65536 KiB, t >= 3 (RFC 9106 option 2). Caps on read: m <= 1 GiB, t <= 16, p <= 16 |
-| Key hierarchy | KEK = Argon2id(pw) -> unwraps random 32 B master key (AES-256-GCM, tag = password check) -> HKDF-SHA-256 subkeys | age v1 pattern: password never touches payload; wrap tag doubles as "wrong password" detector |
-| Payload AEAD | AES-256-GCM, 12 B nonce = 11 B BE counter || 1 B last-flag, 16 B tag, fixed 64 KiB plaintext chunks, AAD = SHA-256(full header) | age/STREAM construction: truncation, reorder, drop, swap and header-transplant all fail authentication; no 64 GiB GCM single-message limit |
-| Header integrity | HMAC-SHA-256 over magic..JSON with HKDF-derived header key, and every chunk's AAD binds the header | Detects edits to non-KDF fields (chunkSize, payloadNonce, createdAt, ...) |
-| Inner format | tar (node-tar v7 `Pack`/`Unpack`), optional gzip inside the encryption | Streams; hardened extractor; but links and devices are still filtered out by us |
-| Writing | `fs.mkdtemp` (0700) -> write `<name>.part` with `flags:'wx', mode:0o600, flush:true` -> `fs.rename` over final path | Atomic replace, no half-written archives, no world-readable temp |
-| Cancellation | `stream/promises.pipeline(..., { signal })` -> AbortError `ABORT_ERR`; `finally` removes temp dir with `rm({recursive:true, force:true})` | Verified |
+| Topic                | Decision                                                                                                                                  | Why (short)                                                                                                                                                           |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Password KDF         | Argon2id (v1.3 / 0x13) via `hash-wasm`, salt 16 B random, 32 B output                                                                     | RFC 9106 + OWASP recommend Argon2id; hash-wasm is the fastest pure-WASM impl and needs no native build in Electron                                                    |
+| KDF params (default) | **m = 262144 KiB (256 MiB), t = 3, p = 4** (stored in header)                                                                             | 0.45 s on M4; 4x RFC 9106 "second recommended" memory. Floor accepted on read: m >= 65536 KiB, t >= 3 (RFC 9106 option 2). Caps on read: m <= 1 GiB, t <= 16, p <= 16 |
+| Key hierarchy        | KEK = Argon2id(pw) -> unwraps random 32 B master key (AES-256-GCM, tag = password check) -> HKDF-SHA-256 subkeys                          | age v1 pattern: password never touches payload; wrap tag doubles as "wrong password" detector                                                                         |
+| Payload AEAD         | AES-256-GCM, 12 B nonce = 11 B BE counter                                                                                                 |                                                                                                                                                                       | 1 B last-flag, 16 B tag, fixed 64 KiB plaintext chunks, AAD = SHA-256(full header) | age/STREAM construction: truncation, reorder, drop, swap and header-transplant all fail authentication; no 64 GiB GCM single-message limit |
+| Header integrity     | HMAC-SHA-256 over magic..JSON with HKDF-derived header key, and every chunk's AAD binds the header                                        | Detects edits to non-KDF fields (chunkSize, payloadNonce, createdAt, ...)                                                                                             |
+| Inner format         | tar (node-tar v7 `Pack`/`Unpack`), optional gzip inside the encryption                                                                    | Streams; hardened extractor; but links and devices are still filtered out by us                                                                                       |
+| Writing              | `fs.mkdtemp` (0700) -> write `<name>.part` with `flags:'wx', mode:0o600, flush:true` -> `fs.rename` over final path                       | Atomic replace, no half-written archives, no world-readable temp                                                                                                      |
+| Cancellation         | `stream/promises.pipeline(..., { signal })` -> AbortError `ABORT_ERR`; `finally` removes temp dir with `rm({recursive:true, force:true})` | Verified                                                                                                                                                              |
 
 ## 1. Sources
 
@@ -81,7 +86,7 @@ Facts checked in the installed package:
   https://www.rfc-editor.org/rfc/rfc9106.html#section-4
 - RFC 9106 section 7.3/7.4: for Argon2id "1 pass maximizes the attack costs for the constant defender time"; i.e. for a fixed
   time budget prefer more memory over more passes.
-- OWASP (server login context, so a *minimum*): "Use Argon2id with a minimum configuration of 19 MiB of memory, an iteration
+- OWASP (server login context, so a _minimum_): "Use Argon2id with a minimum configuration of 19 MiB of memory, an iteration
   count of 2, and 1 degree of parallelism"; equivalent-cost alternatives listed: m=47104 (46 MiB) t=1 p=1; m=19456 t=2 p=1;
   m=12288 t=3 p=1; m=9216 t=4 p=1; m=7168 t=5 p=1. https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id
 - age v1 (a comparable "password-protected file" design) uses scrypt for its passphrase stanza and says the reader "SHOULD apply an
@@ -90,19 +95,19 @@ Facts checked in the installed package:
 
 ### 2.3 Measured cost on this machine (hash-wasm 4.12.0, Node 22.22.3, Apple M4, single thread)
 
-| Parameters | Time | Notes |
-| --- | --- | --- |
-| m=19 MiB t=2 p=1 (OWASP minimum) | 19-24 ms | server-login floor, too cheap for an offline-attackable file |
-| m=46 MiB t=1 p=1 (OWASP alt.) | 25 ms | |
-| m=64 MiB t=3 p=1 | ~100 ms | |
-| m=64 MiB t=3 p=4 (RFC 9106 option 2) | ~105 ms | p does not change our cost (single-threaded WASM) |
-| m=128 MiB t=3 p=4 | ~218 ms | |
-| m=128 MiB t=6 p=4 | ~414 ms | |
-| **m=256 MiB t=3 p=4** | **~420-480 ms** | chosen default |
-| m=256 MiB t=4 p=4 | ~577 ms | |
-| m=512 MiB t=2 p=4 | ~585 ms | |
-| m=512 MiB t=3 p=4 | ~879 ms | |
-| m=1 GiB t=1 p=4 | ~659 ms | RFC option-1 shape at half memory |
+| Parameters                           | Time            | Notes                                                        |
+| ------------------------------------ | --------------- | ------------------------------------------------------------ |
+| m=19 MiB t=2 p=1 (OWASP minimum)     | 19-24 ms        | server-login floor, too cheap for an offline-attackable file |
+| m=46 MiB t=1 p=1 (OWASP alt.)        | 25 ms           |                                                              |
+| m=64 MiB t=3 p=1                     | ~100 ms         |                                                              |
+| m=64 MiB t=3 p=4 (RFC 9106 option 2) | ~105 ms         | p does not change our cost (single-threaded WASM)            |
+| m=128 MiB t=3 p=4                    | ~218 ms         |                                                              |
+| m=128 MiB t=6 p=4                    | ~414 ms         |                                                              |
+| **m=256 MiB t=3 p=4**                | **~420-480 ms** | chosen default                                               |
+| m=256 MiB t=4 p=4                    | ~577 ms         |                                                              |
+| m=512 MiB t=2 p=4                    | ~585 ms         |                                                              |
+| m=512 MiB t=3 p=4                    | ~879 ms         |                                                              |
+| m=1 GiB t=1 p=4                      | ~659 ms         | RFC option-1 shape at half memory                            |
 
 ### 2.4 Chosen parameters and justification
 
@@ -110,7 +115,7 @@ Facts checked in the installed package:
   - 0.45 s on an M4; an older Intel Mac is roughly 2-4x slower, i.e. ~1-2 s, still acceptable for an operation that happens once
     per backup/restore (not per login). This sits in the requested 0.5-1 s interactive budget across the fleet.
   - 256 MiB is 4x the memory of RFC 9106's "much less memory" option and 13x OWASP's minimum; a stolen `.devbackup` is an
-    *offline* target, so the server-oriented minimums are inappropriate. Memory, not passes, is what hurts GPU/ASIC attackers
+    _offline_ target, so the server-oriented minimums are inappropriate. Memory, not passes, is what hurts GPU/ASIC attackers
     (RFC 9106 section 7.3), so we spend the budget on m with t=3 to keep the RFC option-2 pass count.
   - p=4 follows RFC 9106 step 4 ("Select p=4 lanes") and keeps the option open to use a multithreaded implementation later
     without changing stored parameters. It costs nothing today.
@@ -152,14 +157,14 @@ masterKey = 32 random bytes --------+
 
 All integers big-endian. `L` = header JSON length.
 
-| Offset | Size | Field | Value / rule |
-| --- | --- | --- | --- |
-| 0 | 6 | magic | ASCII `DEVBKP` = `44 45 56 42 4B 50` |
-| 6 | 2 | formatVersion | u16 = `0x0001` |
-| 8 | 4 | headerLength `L` | u32; reader rejects `L > 65536` before allocating |
-| 12 | L | header JSON | UTF-8, no BOM, no trailing newline, produced by `JSON.stringify` (schema in section 4.1). Plaintext, no secrets. |
-| 12+L | 32 | headerMac | HMAC-SHA-256(headerMacKey, bytes[0, 12+L)) |
-| 44+L | ... | payload chunks | `ceil(P / 65536)` chunks; chunk i is `ct_i || tag_i` (16 B tag); all but the last have exactly 65536+16 bytes; the last has 1..65536 plaintext bytes, i.e. 17..65552 bytes; **nothing may follow the last chunk** |
+| Offset | Size | Field            | Value / rule                                                                                                     |
+| ------ | ---- | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 0      | 6    | magic            | ASCII `DEVBKP` = `44 45 56 42 4B 50`                                                                             |
+| 6      | 2    | formatVersion    | u16 = `0x0001`                                                                                                   |
+| 8      | 4    | headerLength `L` | u32; reader rejects `L > 65536` before allocating                                                                |
+| 12     | L    | header JSON      | UTF-8, no BOM, no trailing newline, produced by `JSON.stringify` (schema in section 4.1). Plaintext, no secrets. |
+| 12+L   | 32   | headerMac        | HMAC-SHA-256(headerMacKey, bytes[0, 12+L))                                                                       |
+| 44+L   | ...  | payload chunks   | `ceil(P / 65536)` chunks; chunk i is `ct_i                                                                       |     | tag_i` (16 B tag); all but the last have exactly 65536+16 bytes; the last has 1..65536 plaintext bytes, i.e. 17..65552 bytes; **nothing may follow the last chunk** |
 
 "The header" (for AAD purposes) = bytes `[0, 44+L)`, i.e. including the MAC. `H = 44 + L` is the payload offset.
 
@@ -174,8 +179,15 @@ Aligned with `BackupHeaderInfo` in `packages/model/src/backup.ts` (`formatVersio
   "formatVersion": 1,
   "createdAt": "2026-08-27T10:00:00.000Z",
   "appVersion": "0.1.0",
-  "kdf": { "algorithm": "argon2id", "version": 19, "salt": "<base64 16 B>",
-           "memoryKiB": 262144, "iterations": 3, "parallelism": 4, "hashLength": 32 },
+  "kdf": {
+    "algorithm": "argon2id",
+    "version": 19,
+    "salt": "<base64 16 B>",
+    "memoryKiB": 262144,
+    "iterations": 3,
+    "parallelism": 4,
+    "hashLength": 32
+  },
   "wrap": { "algorithm": "aes-256-gcm", "wrappedKey": "<base64 48 B: ct32||tag16>" },
   "cipher": { "algorithm": "aes-256-gcm", "chunkSize": 65536, "payloadNonce": "<base64 16 B>" },
   "payload": { "format": "tar", "compression": "none" }
@@ -196,7 +208,7 @@ Why this construction (rather than one `createCipheriv('aes-256-gcm')` over the 
   backup with node_modules-sized payloads can exceed that. Per-chunk GCM with 64 KiB plaintext is nowhere near it.
   https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf
 - **Node's streaming GCM emits unauthenticated plaintext**: verified that `decipher.update(ct)` returns the full plaintext bytes
-  *before* `final()` throws on a bad tag ("update() before final() on bad tag yields 6 bytes of unauthenticated plaintext").
+  _before_ `final()` throws on a bad tag ("update() before final() on bad tag yields 6 bytes of unauthenticated plaintext").
   With one giant GCM stream you would already have written gigabytes of attacker-controlled bytes to disk (and fed them to
   `tar.Unpack`) before learning the file was forged. With 64 KiB chunks we buffer each chunk's plaintext and only forward it
   after `final()` succeeds.
@@ -212,7 +224,7 @@ Why this construction (rather than one `createCipheriv('aes-256-gcm')` over the 
   successfully decrypting a final chunk." https://age-encryption.org/v1#payload (construction from https://eprint.iacr.org/2015/189)
 - Nonce uniqueness: the content key is unique per file (random master key + random payloadNonce through HKDF) and nonces are a
   deterministic counter, so there is no nonce reuse across chunks or files. NIST 8.3's 2^32-invocation limit applies to
-  *random* IVs; with the deterministic construction the limit is 2^(counter bits) = 2^88 chunks (~2^104 bytes) per key.
+  _random_ IVs; with the deterministic construction the limit is 2^(counter bits) = 2^88 chunks (~2^104 bytes) per key.
   Node accepts a 16-byte IV for GCM (verified) - **enforce `iv.length === 12` in our code**, the 96-bit path is the only one
   that avoids GHASH-derived IVs.
 
@@ -269,19 +281,19 @@ For a seekable file (our case) "last" is simply `remaining <= CS`. For a non-see
 
 ### 5.4 Verified detection matrix (prototype: tar v7 + node:crypto + hash-wasm, 200 KB payload, 5 chunks)
 
-| Mutation | Result |
-| --- | --- |
-| wrong password | `ARCHIVE_AUTH_FAILED` (wrap tag) |
-| flip a byte in `kdf.iterations` | `ARCHIVE_AUTH_FAILED` (different KEK) |
-| flip a byte in `createdAt` (not a KDF input) | `ARCHIVE_INVALID: header MAC mismatch` |
-| flip a byte inside the JSON syntax | JSON parse error -> `ARCHIVE_INVALID` |
-| flip one payload byte | `INTEGRITY_MISMATCH: chunk 4` (early, nothing after it is decrypted) |
-| swap chunks 1 and 2 | `INTEGRITY_MISMATCH: chunk 1` (counter in nonce) |
-| drop chunk 1 | `INTEGRITY_MISMATCH: chunk 1` |
-| truncate mid-chunk (-1000 B) | `INTEGRITY_MISMATCH: chunk 4` (treated as final, wrong length/flag) |
-| truncate at a chunk boundary (keep 3 chunks) | `INTEGRITY_MISMATCH: chunk 2` (encrypted with last=0, verified with last=1) |
-| append 5 junk bytes | `INTEGRITY_MISMATCH: chunk 4` (boundary shift; in addition the reader asserts EOF after the final chunk) |
-| keep header, replace chunk 0 with other data | `INTEGRITY_MISMATCH: chunk 0` (AAD = this header's hash) |
+| Mutation                                      | Result                                                                                                                                                                                       |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| wrong password                                | `ARCHIVE_AUTH_FAILED` (wrap tag)                                                                                                                                                             |
+| flip a byte in `kdf.iterations`               | `ARCHIVE_AUTH_FAILED` (different KEK)                                                                                                                                                        |
+| flip a byte in `createdAt` (not a KDF input)  | `ARCHIVE_INVALID: header MAC mismatch`                                                                                                                                                       |
+| flip a byte inside the JSON syntax            | JSON parse error -> `ARCHIVE_INVALID`                                                                                                                                                        |
+| flip one payload byte                         | `INTEGRITY_MISMATCH: chunk 4` (early, nothing after it is decrypted)                                                                                                                         |
+| swap chunks 1 and 2                           | `INTEGRITY_MISMATCH: chunk 1` (counter in nonce)                                                                                                                                             |
+| drop chunk 1                                  | `INTEGRITY_MISMATCH: chunk 1`                                                                                                                                                                |
+| truncate mid-chunk (-1000 B)                  | `INTEGRITY_MISMATCH: chunk 4` (treated as final, wrong length/flag)                                                                                                                          |
+| truncate at a chunk boundary (keep 3 chunks)  | `INTEGRITY_MISMATCH: chunk 2` (encrypted with last=0, verified with last=1)                                                                                                                  |
+| append 5 junk bytes                           | `INTEGRITY_MISMATCH: chunk 4` (boundary shift; in addition the reader asserts EOF after the final chunk)                                                                                     |
+| keep header, replace chunk 0 with other data  | `INTEGRITY_MISMATCH: chunk 0` (AAD = this header's hash)                                                                                                                                     |
 | `authTagLength` omitted on `createDecipheriv` | Node 22.22.3 **accepts 4/8/12-byte tags** (only 3 rejected); with `{authTagLength:16}` every non-16 tag -> `ERR_CRYPTO_INVALID_AUTH_TAG`. Always pass it and also check `tag.length === 16`. |
 
 ## 6. Threat notes
@@ -297,7 +309,7 @@ m=64 MiB floor. Consequences (order-of-magnitude, single GPU):
   `min(8)` and should show a strength meter / block top-list passwords.
 - 10^9 candidates (8-char pattern spaces): about a month.
 - Random 12+ character / 5-word passphrase (>= 70 bits): infeasible.
-A 16-byte random salt per file removes precomputation and makes two backups with the same password independent.
+  A 16-byte random salt per file removes precomputation and makes two backups with the same password independent.
 
 ### 6.2 Tampered file
 
@@ -320,7 +332,7 @@ the end of file is reached without successfully decrypting a final chunk".
 
 Both surface as a wrap-tag failure. This is intentional (age's password stanza has the same property): the file must not act
 as an oracle that distinguishes "wrong password" from "wrong KDF params". The UI copy should say "Wrong password, or the file
-is damaged", and the header-MAC error (which can only happen *after* a successful unwrap) should say "file modified".
+is damaged", and the header-MAC error (which can only happen _after_ a successful unwrap) should say "file modified".
 
 ### 6.5 What is not protected
 
@@ -352,7 +364,7 @@ Exports from `tar`: `create/c`, `extract/x`, `list/t`, `update/u`, `replace/r`, 
   https://github.com/isaacs/node-tar#class-unpack
 - `class ReadEntry extends Minipass` fields: `path`, `type: EntryTypeName`, `size`, `mode`, `linkpath?`, `remain`, `meta`, `ignore`,
   `extended`, `globalExtended`. `EntryTypeName` = `'File' | 'OldFile' | 'Link' | 'SymbolicLink' | 'CharacterDevice' | 'BlockDevice' |
-  'Directory' | 'FIFO' | 'ContiguousFile' | 'GlobalExtendedHeader' | 'ExtendedHeader' | ... | 'Unsupported'`.
+'Directory' | 'FIFO' | 'ContiguousFile' | 'GlobalExtendedHeader' | 'ExtendedHeader' | ... | 'Unsupported'`.
 - `filter` semantics (README "Examples"): "Tar-creating methods call the filter with filter(path, stat). Tar-reading methods
   (including extraction) call the filter with filter(path, entry)." Verified: `Parser` passes only filesystem entries to the
   filter (PAX meta entries are handled internally) and `Directory` paths arrive **with a trailing slash** (`payload/`).
@@ -398,11 +410,11 @@ still have extracted as much it could from the archive, so there may be some gar
    reject. Duplicate paths -> reject (do not rely on `keep`).
 6. **Size limits**: `entry.size` must be `<= declared sizeBytes` for that artifact, running total `<= manifest.stats.payloadBytes`
    plus a small slack, entry count `<= manifestArtifactCount + fileCount sum`; abort the whole restore on exceed
-   (`ARCHIVE_LIMIT_EXCEEDED`). If `compression: 'gzip'` is used, gunzip in *our* pipeline with a byte-counting `Transform` that caps
+   (`ARCHIVE_LIMIT_EXCEEDED`). If `compression: 'gzip'` is used, gunzip in _our_ pipeline with a byte-counting `Transform` that caps
    output at the manifest total (tar's `maxDecompressionRatio` only guards tar's own gunzip; GHSA-23hp-3jrh-7fpw).
 7. **Extraction target**: a fresh `fs.mkdtemp` directory (0700, verified) under the app's data dir, never a user-chosen or
    pre-existing folder (README item 1 / TOCTOU). Unpack options: `{ cwd, strict: true, preservePaths: false, strip: 0, maxDepth: 64,
-   chmod: false, preserveOwner: false, unlink: false, keep: false, noMtime: false, filter, onReadEntry, onwarn }`.
+chmod: false, preserveOwner: false, unlink: false, keep: false, noMtime: false, filter, onReadEntry, onwarn }`.
 8. **Post-extraction integrity**: after `'close'`, read `checksums.json` (last entry) and verify every file's SHA-256 and size
    (`INTEGRITY_MISMATCH` on mismatch); only then let the restore planner move files into place.
 9. **Cleanup**: on any error or abort, `rm(stagingDir, { recursive: true, force: true })`; tar warns that partial extraction leaves
@@ -411,19 +423,19 @@ still have extracted as much it could from the archive, so there may be some gar
 
 ### 7.4 Known node-tar extraction vulnerabilities (why 1, 2, 6 and 7 above exist)
 
-| Advisory | Class | Affected -> fixed |
-| --- | --- | --- |
-| CVE-2021-32803 (GHSA-r628-mhmh-qjhw) | symlink path traversal via directory cache poisoning ("Arbitrary File Creation, Arbitrary File Overwrite, Arbitrary Code Execution") | 4.x < 4.4.15, 5.x < 5.0.7 -> 4.4.15 / 5.0.7 |
-| CVE-2021-32804 (GHSA-3jfq-g458-7qm9) | absolute-path stripping bypass (`//` and drive prefixes) | < 3.2.2, 4.x < 4.4.14 -> 3.2.2 / 4.4.14 |
-| CVE-2021-37701 (GHSA-9r2w-394v-53qc), CVE-2021-37712 (GHSA-qq89-hq3f-393p) | symlink traversal via unicode / case / path-separator equivalence in the directory cache | fixed in 4.4.16-4.4.18 / 5.0.8-5.0.10 / 6.1.7-6.1.9 |
-| CVE-2021-37713 (GHSA-5955-9wpr-37jh) | `..` and drive-relative (`c:../`) path bypass on Windows | < 4.4.18, 5.x < 5.0.10 -> 4.4.18 / 5.0.10 |
-| CVE-2024-28863 (GHSA-f5x3-32g6-xq36) | DoS: no folder-depth limit (introduced `maxDepth`) | < 6.2.1 -> 6.2.1 |
-| CVE-2026-24842 (GHSA-34x7-hfp2-rc4v) | **hardlink** path traversal: check vs. creation used different path resolution | reported against `^7.5.0`, published Jan 27 2026; fixed in a later 7.5.x (use >= 7.5.22) |
-| CVE-2026-26960 (GHSA-83g3-92jg-28cx) | hardlink target escape through a symlink chain, default options, "arbitrary file read and write as the extracting user" | reported against 7.5.7, published Feb 16 2026; fixed in a later 7.5.x (use >= 7.5.22) |
-| CVE-2026-31802 (GHSA-9ppj-qmqm-q256) and GHSA-qffp-2rhf-9h96 | drive-relative `linkpath` (`C:../../x`) symlink / hardlink traversal | <= 7.5.10 -> 7.5.11 |
-| CVE-2026-59873 (GHSA-23hp-3jrh-7fpw) | decompression DoS: no cap on total decompressed bytes / entry count ("Gzip Bomb") | <= 7.5.18 -> 7.5.19 |
-| CVE-2026-73566 (GHSA-r292-9mhp-454m) | uncatchable stack overflow in `list`/`extract` member selection with long paths | <= 7.5.20 -> 7.5.21 |
-| GHSA-vmf3-w455-68vh, GHSA-gvwx-54wh-qm9j, GHSA-w8wr-v893-vjvp, GHSA-8x88-c5mf-7j5w | PAX/GNU long-name parser differentials, NUL-byte / numeric-path crashes, negative size infinite loop in `replace` | fixed in 7.5.x releases through 7.5.22 |
+| Advisory                                                                           | Class                                                                                                                                | Affected -> fixed                                                                        |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| CVE-2021-32803 (GHSA-r628-mhmh-qjhw)                                               | symlink path traversal via directory cache poisoning ("Arbitrary File Creation, Arbitrary File Overwrite, Arbitrary Code Execution") | 4.x < 4.4.15, 5.x < 5.0.7 -> 4.4.15 / 5.0.7                                              |
+| CVE-2021-32804 (GHSA-3jfq-g458-7qm9)                                               | absolute-path stripping bypass (`//` and drive prefixes)                                                                             | < 3.2.2, 4.x < 4.4.14 -> 3.2.2 / 4.4.14                                                  |
+| CVE-2021-37701 (GHSA-9r2w-394v-53qc), CVE-2021-37712 (GHSA-qq89-hq3f-393p)         | symlink traversal via unicode / case / path-separator equivalence in the directory cache                                             | fixed in 4.4.16-4.4.18 / 5.0.8-5.0.10 / 6.1.7-6.1.9                                      |
+| CVE-2021-37713 (GHSA-5955-9wpr-37jh)                                               | `..` and drive-relative (`c:../`) path bypass on Windows                                                                             | < 4.4.18, 5.x < 5.0.10 -> 4.4.18 / 5.0.10                                                |
+| CVE-2024-28863 (GHSA-f5x3-32g6-xq36)                                               | DoS: no folder-depth limit (introduced `maxDepth`)                                                                                   | < 6.2.1 -> 6.2.1                                                                         |
+| CVE-2026-24842 (GHSA-34x7-hfp2-rc4v)                                               | **hardlink** path traversal: check vs. creation used different path resolution                                                       | reported against `^7.5.0`, published Jan 27 2026; fixed in a later 7.5.x (use >= 7.5.22) |
+| CVE-2026-26960 (GHSA-83g3-92jg-28cx)                                               | hardlink target escape through a symlink chain, default options, "arbitrary file read and write as the extracting user"              | reported against 7.5.7, published Feb 16 2026; fixed in a later 7.5.x (use >= 7.5.22)    |
+| CVE-2026-31802 (GHSA-9ppj-qmqm-q256) and GHSA-qffp-2rhf-9h96                       | drive-relative `linkpath` (`C:../../x`) symlink / hardlink traversal                                                                 | <= 7.5.10 -> 7.5.11                                                                      |
+| CVE-2026-59873 (GHSA-23hp-3jrh-7fpw)                                               | decompression DoS: no cap on total decompressed bytes / entry count ("Gzip Bomb")                                                    | <= 7.5.18 -> 7.5.19                                                                      |
+| CVE-2026-73566 (GHSA-r292-9mhp-454m)                                               | uncatchable stack overflow in `list`/`extract` member selection with long paths                                                      | <= 7.5.20 -> 7.5.21                                                                      |
+| GHSA-vmf3-w455-68vh, GHSA-gvwx-54wh-qm9j, GHSA-w8wr-v893-vjvp, GHSA-8x88-c5mf-7j5w | PAX/GNU long-name parser differentials, NUL-byte / numeric-path crashes, negative size infinite loop in `replace`                    | fixed in 7.5.x releases through 7.5.22                                                   |
 
 Sources: https://github.com/isaacs/node-tar/security/advisories and https://github.com/advisories/<GHSA-id>.
 Takeaways: (a) three of the four 2026 traversal bugs are **hardlink** bugs and every 2021 one is a symlink bug - rejecting both
@@ -438,7 +450,7 @@ use `tar.replace`/`tar.update` on untrusted archives.
 because `follow` is false). Add entries with explicit relative paths (`pack.add('manifest.json')` first, `pack.add('payload')`,
 `pack.add('checksums.json')` last), then `pack.end()`. `portable: true` omits `uid/gid/uname/gname/dev/ino/nlink/atime/ctime`
 and normalises modes (README `portable`), which is what we want for a cross-machine format. Git worktrees can contain symlinks;
-the provider must materialise or skip them *before* packing and record that in the manifest rather than letting tar archive
+the provider must materialise or skip them _before_ packing and record that in the manifest rather than letting tar archive
 `SymbolicLink` entries.
 
 ## 8. Streams, temp files, atomic writes, cancellation (Node 22)
@@ -449,7 +461,7 @@ the provider must materialise or skip them *before* packing and record that in t
   Verified: abort -> rejection with `name: 'AbortError'`, `code: 'ABORT_ERR'` -> map to `CANCELLED`.
   https://nodejs.org/api/stream.html#streampipelinesource-transforms-destination-options
 - `fsPromises.mkdtemp(prefix)`: "A unique directory name is generated by appending six random characters to the end of the provided
-  prefix"; prefix must end with `path.sep` to create *inside* a directory. Verified mode **0700** on macOS. Node >= 24.4 also has
+  prefix"; prefix must end with `path.sep` to create _inside_ a directory. Verified mode **0700** on macOS. Node >= 24.4 also has
   `mkdtempDisposable` (`await using`), not available on our Node 22 baseline. https://nodejs.org/api/fs.html#fspromisesmkdtempprefix-options
 - `fs.createWriteStream(path, { flags: 'wx', mode: 0o600, flush: true, signal })`: `flush` - "If true, the underlying file descriptor is
   flushed prior to closing it. Default: false." (= fsync before close); `'wx'` fails if the temp file already exists; `mode` 0o600 keeps
@@ -472,61 +484,118 @@ the provider must materialise or skip them *before* packing and record that in t
 
 ```ts
 import { argon2id } from 'hash-wasm'
-import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  hkdfSync,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto'
 
-const MAGIC = Buffer.from('DEVBKP'); const VERSION = 1; const TAG = 16
+const MAGIC = Buffer.from('DEVBKP')
+const VERSION = 1
+const TAG = 16
 const wrapAad = Buffer.concat([MAGIC, Buffer.from([0, VERSION])])
-const hkdf = (ikm: Buffer, salt: Buffer, info: string) => Buffer.from(hkdfSync('sha256', ikm, salt, info, 32)) // ArrayBuffer -> Buffer
+const hkdf = (ikm: Buffer, salt: Buffer, info: string) =>
+  Buffer.from(hkdfSync('sha256', ikm, salt, info, 32)) // ArrayBuffer -> Buffer
 
 // --- backup (run argon2id inside a worker_thread; see 2.1) ---
 const salt = randomBytes(16)
-const kdf = { algorithm: 'argon2id', version: 19, salt: salt.toString('base64'), memoryKiB: 262144, iterations: 3, parallelism: 4, hashLength: 32 }
-const kek = Buffer.from(await argon2id({ password: password.normalize('NFC'), salt, memorySize: kdf.memoryKiB,
-  iterations: kdf.iterations, parallelism: kdf.parallelism, hashLength: 32, outputType: 'binary' }))
+const kdf = {
+  algorithm: 'argon2id',
+  version: 19,
+  salt: salt.toString('base64'),
+  memoryKiB: 262144,
+  iterations: 3,
+  parallelism: 4,
+  hashLength: 32,
+}
+const kek = Buffer.from(
+  await argon2id({
+    password: password.normalize('NFC'),
+    salt,
+    memorySize: kdf.memoryKiB,
+    iterations: kdf.iterations,
+    parallelism: kdf.parallelism,
+    hashLength: 32,
+    outputType: 'binary',
+  }),
+)
 const masterKey = randomBytes(32)
-const w = createCipheriv('aes-256-gcm', kek, Buffer.alloc(12, 0), { authTagLength: TAG }); w.setAAD(wrapAad)
-const wrappedKey = Buffer.concat([w.update(masterKey), w.final(), w.getAuthTag()])           // 48 bytes
+const w = createCipheriv('aes-256-gcm', kek, Buffer.alloc(12, 0), { authTagLength: TAG })
+w.setAAD(wrapAad)
+const wrappedKey = Buffer.concat([w.update(masterKey), w.final(), w.getAuthTag()]) // 48 bytes
 const payloadNonce = randomBytes(16)
-const json = Buffer.from(JSON.stringify({ format: 'devbackup', formatVersion: VERSION, createdAt: new Date().toISOString(), kdf,
-  wrap: { algorithm: 'aes-256-gcm', wrappedKey: wrappedKey.toString('base64') },
-  cipher: { algorithm: 'aes-256-gcm', chunkSize: 65536, payloadNonce: payloadNonce.toString('base64') },
-  payload: { format: 'tar', compression: 'none' } }))
-const fixed = Buffer.alloc(12); MAGIC.copy(fixed); fixed.writeUInt16BE(VERSION, 6); fixed.writeUInt32BE(json.length, 8)
+const json = Buffer.from(
+  JSON.stringify({
+    format: 'devbackup',
+    formatVersion: VERSION,
+    createdAt: new Date().toISOString(),
+    kdf,
+    wrap: { algorithm: 'aes-256-gcm', wrappedKey: wrappedKey.toString('base64') },
+    cipher: {
+      algorithm: 'aes-256-gcm',
+      chunkSize: 65536,
+      payloadNonce: payloadNonce.toString('base64'),
+    },
+    payload: { format: 'tar', compression: 'none' },
+  }),
+)
+const fixed = Buffer.alloc(12)
+MAGIC.copy(fixed)
+fixed.writeUInt16BE(VERSION, 6)
+fixed.writeUInt32BE(json.length, 8)
 const preMac = Buffer.concat([fixed, json])
-const headerMac = createHmac('sha256', hkdf(masterKey, Buffer.alloc(0), 'devbkp/v1/header-mac')).update(preMac).digest()
+const headerMac = createHmac('sha256', hkdf(masterKey, Buffer.alloc(0), 'devbkp/v1/header-mac'))
+  .update(preMac)
+  .digest()
 const header = Buffer.concat([preMac, headerMac])
 const contentKey = hkdf(masterKey, payloadNonce, 'devbkp/v1/payload')
 const aad = createHash('sha256').update(header).digest()
 
 // --- restore ---
-const wrapped = Buffer.from(hdr.wrap.wrappedKey, 'base64'); if (wrapped.length !== 48) throw invalid()
+const wrapped = Buffer.from(hdr.wrap.wrappedKey, 'base64')
+if (wrapped.length !== 48) throw invalid()
 let masterKey2: Buffer
 try {
   const d = createDecipheriv('aes-256-gcm', kek, Buffer.alloc(12, 0), { authTagLength: TAG })
-  d.setAAD(wrapAad); d.setAuthTag(wrapped.subarray(32))
+  d.setAAD(wrapAad)
+  d.setAuthTag(wrapped.subarray(32))
   masterKey2 = Buffer.concat([d.update(wrapped.subarray(0, 32)), d.final()])
-} catch { throw authFailed() }                                            // wrong password OR modified header
-const expect = createHmac('sha256', hkdf(masterKey2, Buffer.alloc(0), 'devbkp/v1/header-mac')).update(bytes.subarray(0, 12 + L)).digest()
+} catch {
+  throw authFailed()
+} // wrong password OR modified header
+const expect = createHmac('sha256', hkdf(masterKey2, Buffer.alloc(0), 'devbkp/v1/header-mac'))
+  .update(bytes.subarray(0, 12 + L))
+  .digest()
 if (!timingSafeEqual(expect, headerMac)) throw invalid('header MAC mismatch')
 ```
 
 ### 9.2 Chunk seal / open (`node:crypto`)
 
 ```ts
-function nonce(i: number, last: boolean): Buffer {   // 11-byte BE counter || last flag; i < 2^53 is plenty
-  const n = Buffer.alloc(12); n.writeUInt32BE(Math.floor(i / 2 ** 32), 3); n.writeUInt32BE(i % 2 ** 32, 7); n[11] = last ? 1 : 0; return n
+function nonce(i: number, last: boolean): Buffer {
+  // 11-byte BE counter || last flag; i < 2^53 is plenty
+  const n = Buffer.alloc(12)
+  n.writeUInt32BE(Math.floor(i / 2 ** 32), 3)
+  n.writeUInt32BE(i % 2 ** 32, 7)
+  n[11] = last ? 1 : 0
+  return n
 }
 function seal(key: Buffer, aad: Buffer, i: number, last: boolean, pt: Buffer): Buffer {
   const c = createCipheriv('aes-256-gcm', key, nonce(i, last), { authTagLength: 16 })
-  c.setAAD(aad)                                                            // before update()
-  return Buffer.concat([c.update(pt), c.final(), c.getAuthTag()])          // getAuthTag() after final()
+  c.setAAD(aad) // before update()
+  return Buffer.concat([c.update(pt), c.final(), c.getAuthTag()]) // getAuthTag() after final()
 }
 function open(key: Buffer, aad: Buffer, i: number, last: boolean, ct: Buffer): Buffer {
   if (ct.length < 16 + (last ? 1 : 0)) throw invalid('short chunk')
   const d = createDecipheriv('aes-256-gcm', key, nonce(i, last), { authTagLength: 16 })
-  d.setAAD(aad); d.setAuthTag(ct.subarray(ct.length - 16))                 // for GCM: setAuthTag before final()
+  d.setAAD(aad)
+  d.setAuthTag(ct.subarray(ct.length - 16)) // for GCM: setAuthTag before final()
   const pt = d.update(ct.subarray(0, ct.length - 16))
-  d.final()                                                                // throws on any tampering; pt is only released after this
+  d.final() // throws on any tampering; pt is only released after this
   return pt
 }
 ```
@@ -543,23 +612,46 @@ import { Readable } from 'node:stream'
 import type { Stats } from 'node:fs'
 
 // backup: staging dir -> tar stream -> encrypt -> file
-const pack = new Pack({ cwd: stagingDir, portable: true, follow: false, preservePaths: false, strict: true,
-  filter: (_path: string, stat: Stats) => stat.isFile() || stat.isDirectory() })
-pack.add('manifest.json'); pack.add('payload'); pack.add('checksums.json'); pack.end()
-await pipeline(pack, encryptorTransform, ws, { signal })                   // Pack (Minipass) is accepted directly
+const pack = new Pack({
+  cwd: stagingDir,
+  portable: true,
+  follow: false,
+  preservePaths: false,
+  strict: true,
+  filter: (_path: string, stat: Stats) => stat.isFile() || stat.isDirectory(),
+})
+pack.add('manifest.json')
+pack.add('payload')
+pack.add('checksums.json')
+pack.end()
+await pipeline(pack, encryptorTransform, ws, { signal }) // Pack (Minipass) is accepted directly
 
 // restore: decrypted chunks -> Unpack into a fresh mkdtemp dir
 const unpack = new Unpack({
-  cwd: extractDir, strict: true, preservePaths: false, strip: 0, maxDepth: 64, chmod: false, preserveOwner: false,
+  cwd: extractDir,
+  strict: true,
+  preservePaths: false,
+  strip: 0,
+  maxDepth: 64,
+  chmod: false,
+  preserveOwner: false,
   filter: (p: string, e: ReadEntry) => {
-    const rel = e.type === 'Directory' ? p.replace(/\/$/, '') : p           // dirs arrive as "payload/"
+    const rel = e.type === 'Directory' ? p.replace(/\/$/, '') : p // dirs arrive as "payload/"
     const okType = e.type === 'File' || e.type === 'Directory'
     const segs = rel.split('/')
-    const okPath = rel.length > 0 && !rel.includes('\0') && !rel.includes('\\') && !/^[A-Za-z]:/.test(rel)
-      && !segs.some((s) => s === '' || s === '.' || s === '..') && segs.length <= 64
-    return okType && okPath && manifestAllows(rel, e.size)                 // 7.3 items 5-6
+    const okPath =
+      rel.length > 0 &&
+      !rel.includes('\0') &&
+      !rel.includes('\\') &&
+      !/^[A-Za-z]:/.test(rel) &&
+      !segs.some((s) => s === '' || s === '.' || s === '..') &&
+      segs.length <= 64
+    return okType && okPath && manifestAllows(rel, e.size) // 7.3 items 5-6
   },
-  onReadEntry: (e) => { bytesSeen += e.size; if (bytesSeen > cap) unpack.abort(limitExceeded()) },
+  onReadEntry: (e) => {
+    bytesSeen += e.size
+    if (bytesSeen > cap) unpack.abort(limitExceeded())
+  },
   onwarn: (code, message, data) => log.warn({ code, message, path: data?.entry?.path }),
 })
 await pipeline(Readable.from(decryptChunks(fileHandle, contentKey, aad)), unpack, { signal })
@@ -572,15 +664,15 @@ import { mkdtemp, rename, rm, open } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { dirname, join, basename } from 'node:path'
 
-const staging = await mkdtemp(join(app.getPath('userData'), 'staging', 'bk-'))   // 0700
-const part = join(dirname(outputPath), `.${basename(outputPath)}.part`)         // same volume as the destination
+const staging = await mkdtemp(join(app.getPath('userData'), 'staging', 'bk-')) // 0700
+const part = join(dirname(outputPath), `.${basename(outputPath)}.part`) // same volume as the destination
 try {
   const ws = createWriteStream(part, { flags: 'wx', mode: 0o600, flush: true, signal })
   await pipeline(headerAndPayloadSource, ws, { signal })
-  await rename(part, outputPath)                                                  // atomic replace
+  await rename(part, outputPath) // atomic replace
 } catch (err) {
   await rm(part, { force: true })
-  throw err                                                                       // AbortError -> CANCELLED
+  throw err // AbortError -> CANCELLED
 } finally {
   await rm(staging, { recursive: true, force: true, maxRetries: 3 })
 }
@@ -590,7 +682,7 @@ try {
 
 1. Compression: `gzip` (zlib, universally available) vs `zstd` (Node 22.15+ `zlib.createZstdCompress`, experimental on 22). Claude
    JSONL compresses ~5-10x; decide on `payload.compression` default and add the decompression byte cap (7.3 item 6) if enabled.
-2. Should the reader accept KDF params *below* the RFC option-2 floor (m < 64 MiB) for files written by a constrained fallback, or
+2. Should the reader accept KDF params _below_ the RFC option-2 floor (m < 64 MiB) for files written by a constrained fallback, or
    refuse them? Current recommendation: refuse, and never write them.
 3. Where to run Argon2id in Electron: `worker_threads` inside the main process vs `utilityProcess`. Both keep the main loop responsive;
    `utilityProcess` also isolates the 256 MiB WASM heap and can be killed to reclaim memory.
