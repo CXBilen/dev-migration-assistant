@@ -34,6 +34,15 @@ describe('redactSecrets', () => {
     )
   })
 
+  it('keeps numeric values under token-ish keys', () => {
+    expect(redactSecrets('{"cache_creation_input_tokens":37082}')).toBe(
+      '{"cache_creation_input_tokens":37082}',
+    )
+    expect(redactSecrets('input_tokens: 1234, output_tokens=5')).toBe(
+      'input_tokens: 1234, output_tokens=5',
+    )
+  })
+
   it('leaves ordinary text and paths alone', () => {
     const text = 'Restored /Users/alice/Documents/GitHub/demo with 187 sessions on branch main'
     expect(redactSecrets(text)).toBe(text)

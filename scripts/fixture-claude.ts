@@ -1,1 +1,166 @@
-// pnpm fixture:claude — sanitized fixture generator lands in Phase 3
+/**
+ * pnpm fixture:claude --session <path-to-real-transcript.jsonl> --out fixtures/claude/<name> [--project <path>] [--home <path>] [--force]
+ *
+ * Produces a SANITIZED copy of one real Claude Code transcript for use as a committed fixture:
+ * every free-text string is replaced by "REDACTED (<n> chars)", absolute paths under the real home
+ * are remapped to /Users/alice/Documents/GitHub/demo, ids are remapped deterministically, and the
+ * script refuses to write anything that still contains the real user name or a secret-looking value.
+ * The source file is only ever read. Raw transcripts must never be committed.
+ */
+import { createReadStream, promises as fs } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import readline from 'node:readline'
+import { parseArgs } from 'node:util'
+import { createSanitizer } from '../packages/providers/claude-code/src/sanitize'
+import { redactSecrets } from '../packages/shared/src/redact'
+
+const REPO_ROOT = path.resolve(import.meta.dirname, '..')
+const FIXTURES_ROOT = path.join(REPO_ROOT, 'fixtures', 'claude')
+
+function usage(): never {
+  console.error(
+    'Usage: pnpm fixture:claude --session <transcript.jsonl> --out fixtures/claude/<name> [--project <path>] [--home <path>] [--force]',
+  )
+  process.exit(1)
+}
+
+function fail(message: string): never {
+  console.error(`error: ${message}`)
+  process.exit(2)
+}
+
+interface Record_ {
+  type?: unknown
+  cwd?: unknown
+  sessionId?: unknown
+  version?: unknown
+}
+
+async function main(): Promise<void> {
+  const { values } = parseArgs({
+    options: {
+      session: { type: 'string' },
+      out: { type: 'string' },
+      project: { type: 'string' },
+      home: { type: 'string' },
+      force: { type: 'boolean', default: false },
+      help: { type: 'boolean', default: false },
+    },
+    strict: true,
+  })
+  if (values.help || !values.session || !values.out) usage()
+  const sessionFile = path.resolve(values.session)
+  const outDir = path.resolve(values.out)
+  if (!outDir.startsWith(`${FIXTURES_ROOT}${path.sep}`) || outDir === FIXTURES_ROOT) {
+    fail(`--out must be a directory inside ${FIXTURES_ROOT}`)
+  }
+  if (/(^|\/)(local|unsanitized)(\/|$)/.test(path.relative(FIXTURES_ROOT, outDir))) {
+    fail('--out must not be a local/unsanitized fixture directory')
+  }
+  const stat = await fs.stat(sessionFile).catch(() => undefined)
+  if (!stat?.isFile()) fail(`transcript not found: ${sessionFile}`)
+  const homeDir = path.resolve(values.home ?? os.homedir())
+
+  // Pass 1 (read-only): discover the session id, the working directory and the Claude Code version.
+  let sessionId: string | undefined
+  let cwd: string | undefined
+  const versions = new Set<string>()
+  const typeCounts = new Map<string, number>()
+  let lineCount = 0
+  let invalidLines = 0
+  for await (const line of readline.createInterface({
+    input: createReadStream(sessionFile, 'utf8'),
+    crlfDelay: Infinity,
+  })) {
+    lineCount += 1
+    if (line.trim() === '') continue
+    let record: Record_
+    try {
+      record = JSON.parse(line) as Record_
+    } catch {
+      invalidLines += 1
+      continue
+    }
+    if (typeof record.type === 'string')
+      typeCounts.set(record.type, (typeCounts.get(record.type) ?? 0) + 1)
+    if (!sessionId && typeof record.sessionId === 'string') sessionId = record.sessionId
+    if (!cwd && typeof record.cwd === 'string' && record.cwd.startsWith('/')) cwd = record.cwd
+    if (typeof record.version === 'string') versions.add(record.version)
+  }
+  if (!sessionId) fail('no sessionId found in the transcript')
+  const projectPath = values.project ? path.resolve(values.project) : cwd
+  if (!projectPath) fail('no cwd found in the transcript; pass --project')
+  const sanitizer = createSanitizer({ homeDir, projectPath })
+
+  // Pass 2: sanitize line by line into memory (transcripts used as fixtures are small by construction).
+  const outLines: string[] = []
+  for await (const line of readline.createInterface({
+    input: createReadStream(sessionFile, 'utf8'),
+    crlfDelay: Infinity,
+  })) {
+    outLines.push(sanitizer.line(line))
+  }
+  const text = `${outLines.join('\n')}\n`
+  const userName = path.basename(homeDir)
+  if (
+    text.includes(homeDir) ||
+    new RegExp(
+      `(^|[^A-Za-z0-9])${userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[^A-Za-z0-9]|$)`,
+    ).test(text)
+  ) {
+    fail('sanitized output still contains the real home directory or user name; refusing to write')
+  }
+  if (redactSecrets(text) !== text)
+    fail('sanitized output still contains a secret-looking value; refusing to write')
+
+  const outFile = path.join(outDir, `${sanitizer.mapId(sessionId)}.jsonl`)
+  const readmeFile = path.join(outDir, 'README.md')
+  await fs.mkdir(outDir, { recursive: true })
+  for (const f of [outFile, readmeFile]) {
+    if (!values.force && (await fs.stat(f).catch(() => undefined)))
+      fail(`${f} exists; pass --force to overwrite`)
+  }
+  const readme = [
+    `# Sanitized Claude Code transcript fixture`,
+    '',
+    `Generated by \`pnpm fixture:claude\` on ${new Date().toISOString().slice(0, 10)} from one real Claude Code transcript`,
+    `(Claude Code ${[...versions].sort().join(', ') || 'unknown version'}). The source file was only read.`,
+    '',
+    '## What was changed',
+    '',
+    '- Every free-text string (message content, tool results, attachments, prompts, titles) is replaced by `REDACTED (<n> chars)`.',
+    '- Absolute paths under the real home directory are remapped to `/Users/alice/...`; the project path became `/Users/alice/Documents/GitHub/demo`.',
+    '- UUIDs and `msg_`/`req_`/`toolu_` ids are remapped deterministically (`00000000-0000-4000-8000-<n>`, `msg_fixture<n>`, ...).',
+    '- Unparseable lines are replaced by `REDACTED-INVALID-LINE (<n> chars)` so the "invalid line" property survives.',
+    '- Keys, nesting, arrays, numbers, booleans, timestamps, `version`, `gitBranch` and record order are preserved',
+    '  (numbers under secret-looking keys such as `*_tokens` are zeroed so the secret redactor stays quiet).',
+    '',
+    '## Contents',
+    '',
+    `- File: \`${path.basename(outFile)}\` — ${lineCount} lines (${invalidLines} invalid), ${sanitizer.redactedStrings} strings redacted`,
+    `- Record types: ${[...typeCounts.entries()]
+      .sort()
+      .map(([t, n]) => `${t} ×${n}`)
+      .join(', ')}`,
+    '',
+    'Never commit raw transcripts. Regenerate with `pnpm fixture:claude --session <path> --out fixtures/claude/<name> --force`.',
+    '',
+  ].join('\n')
+  const writeAtomic = async (file: string, content: string): Promise<void> => {
+    const tmp = `${file}.${process.pid}.tmp`
+    await fs.writeFile(tmp, content, { mode: 0o644 })
+    await fs.rename(tmp, file)
+  }
+  await writeAtomic(outFile, text)
+  await writeAtomic(readmeFile, readme)
+  console.log(
+    `wrote ${path.relative(REPO_ROOT, outFile)} (${outLines.length} lines, ${sanitizer.redactedStrings} strings redacted)`,
+  )
+  console.log(`wrote ${path.relative(REPO_ROOT, readmeFile)}`)
+}
+
+main().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
+})

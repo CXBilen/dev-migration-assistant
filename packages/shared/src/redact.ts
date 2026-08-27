@@ -48,7 +48,7 @@ const VALUE_PATTERNS: RegExp[] = [
   /(\bBearer\s+)[A-Za-z0-9\-._~+/]+=*/gi,
   /(\bBasic\s+)[A-Za-z0-9+/]+=*/gi,
   // Generic KEY=VALUE / "key": "value" assignments for sensitive-looking keys
-  /((?:api[_-]?key|secret|token|password|passwd|pwd|authorization|access[_-]?key|client[_-]?secret|refresh[_-]?token|private[_-]?key|session[_-]?key)[a-z0-9_-]*["']?\s*[=:]\s*["']?)(?!(?:bearer|basic)\b)([^\s"',;]{4,})/gi,
+  /((?:api[_-]?key|secret|token|password|passwd|pwd|authorization|access[_-]?key|client[_-]?secret|refresh[_-]?token|private[_-]?key|session[_-]?key)[a-z0-9_-]*["']?\s*[=:]\s*["']?)(?!(?:bearer|basic)\b)(?![0-9]+(?:[\s"',;}\]]|$))([^\s"',;]{4,})/gi,
   // Known token shapes
   /\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}\b/g, // Anthropic / OpenAI style
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, // GitHub tokens

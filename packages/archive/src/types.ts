@@ -3,6 +3,7 @@
  * See docs/backup-format/DEVBACKUP_SPEC.md for the byte layout.
  */
 import type { Checksums, Manifest } from '@devmig/model'
+import type { Logger } from '@devmig/shared'
 
 export interface KdfParams {
   algorithm: 'argon2id'
@@ -42,6 +43,8 @@ export interface ExtractionLimits {
   maxEntries: number
   maxEntryBytes: number
   maxPathLength: number
+  /** Max directory depth (path segments). Defaults to DEFAULT_MAX_DEPTH when omitted. */
+  maxDepth?: number
 }
 
 export const DEFAULT_EXTRACTION_LIMITS: ExtractionLimits = {
@@ -49,6 +52,7 @@ export const DEFAULT_EXTRACTION_LIMITS: ExtractionLimits = {
   maxEntries: 2_000_000,
   maxEntryBytes: 50 * 1024 ** 3,
   maxPathLength: 1024,
+  maxDepth: 128,
 }
 
 export interface CreateDevBackupOptions {
@@ -62,6 +66,7 @@ export interface CreateDevBackupOptions {
   /** Override KDF cost (tests use low values). */
   kdf?: Partial<Omit<KdfParams, 'algorithm' | 'saltBase64'>>
   chunkSize?: number
+  logger?: Logger
 }
 
 export interface CreateDevBackupResult {
@@ -70,6 +75,8 @@ export interface CreateDevBackupResult {
   payloadBytes: number
   entries: number
   checksums: Checksums
+  /** Non-fatal notes, e.g. symlinks that were skipped. */
+  warnings?: string[]
 }
 
 export interface ReadHeaderResult {
@@ -82,12 +89,15 @@ export interface InspectDevBackupOptions {
   path: string
   password: string
   signal?: AbortSignal
+  logger?: Logger
 }
 
 export interface InspectDevBackupResult {
   header: DevBackupHeader
   manifest: Manifest
   sizeBytes: number
+  /** Ciphertext bytes actually read from disk (inspection stops after the manifest). */
+  bytesRead?: number
 }
 
 export interface ExtractDevBackupOptions {
@@ -99,6 +109,7 @@ export interface ExtractDevBackupOptions {
   limits?: Partial<ExtractionLimits>
   /** Verify checksums.json against extracted files (default true). */
   verifyChecksums?: boolean
+  logger?: Logger
 }
 
 export interface ExtractDevBackupResult {
@@ -114,6 +125,8 @@ export interface VerifyDevBackupOptions {
   password: string
   signal?: AbortSignal
   onProgress?: (p: ArchiveProgress) => void
+  limits?: Partial<ExtractionLimits>
+  logger?: Logger
 }
 
 export interface VerifyDevBackupResult {
