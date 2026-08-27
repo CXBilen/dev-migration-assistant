@@ -8,6 +8,26 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+## [0.1.0-alpha.2] - 2026-08-28
+
+Still a **UI preview** (the renderer runs on built-in preview data; the Electron bridge to the engines is in progress),
+but the build and the repository are in much better shape.
+
+### Added
+
+- Core engines on `main`: project scanner, migration planner, path remapper (prefix- and worktree-aware), secret
+  classifier, machine-info collector, backup engine (staging → checksums → encrypted container → verify) and restore
+  engine (extract → validate → map paths → preflight/collisions → provider restore → verify → report), with 124 unit
+  and 24 integration tests. `pnpm verify` is green end-to-end (510 unit + 65 integration tests).
+- Provider, renderer and docs audit follow-ups (threat model aligned with the implemented container).
+
+### Changed
+
+- macOS builds without a signing identity are now **ad-hoc signed**: Gatekeeper offers "Open Anyway" instead of
+  reporting the app as damaged.
+- DMG: HiDPI drag-and-drop background, a disk-image style volume icon, `Applications` shortcut.
+- The app icon is used in the app's sidebar; README gained diagrams, screenshots and a "Why you can trust it" section.
+
 ## [0.1.0-alpha.1] - 2026-08-28
 
 **UI preview.** An unsigned arm64 DMG to look at the product flows. The renderer runs on built-in preview data until the

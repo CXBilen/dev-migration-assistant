@@ -2,5 +2,5 @@
 import { contextBridge } from 'electron'
 
 contextBridge.exposeInMainWorld('devMigration', {
-  meta: { appVersion: '0.1.0-alpha.1', platform: process.platform, isE2E: false },
+  meta: { appVersion: '0.1.0-alpha.2', platform: process.platform, isE2E: false },
 })
