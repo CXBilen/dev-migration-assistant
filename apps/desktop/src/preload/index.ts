@@ -1,6 +1,10 @@
-// Preload bridge — full typed API lands in Phase 6. Never expose ipcRenderer directly.
-import { contextBridge } from 'electron'
+/**
+ * Preload (sandboxed, single CJS bundle). Exposes exactly `window.devMigration` — a fixed set of
+ * per-channel functions built in ./api.ts. Never exposes ipcRenderer, Node or the event objects.
+ */
+import { contextBridge, ipcRenderer } from 'electron'
+import { createDevMigrationApi, readPreloadMeta } from './api'
 
-contextBridge.exposeInMainWorld('devMigration', {
-  meta: { appVersion: '0.1.0-alpha.2', platform: process.platform, isE2E: false },
-})
+const api = createDevMigrationApi(ipcRenderer, readPreloadMeta(process.argv, process.platform))
+
+contextBridge.exposeInMainWorld('devMigration', api)

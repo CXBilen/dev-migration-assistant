@@ -8,6 +8,17 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-08-28
+
+Packaging polish for the UI preview; no functional change in the app itself.
+
+### Changed
+
+- App icon and DMG volume icon are rendered with real transparency (no white box on the Dock, in Finder or QuickLook).
+- DMG: Retina-ready background (1× + 2× HiDPI TIFF) with a refined layout — header, dotted guide arrow, install hint
+  with the Gatekeeper "Open Anyway" flow, and Local only / Encrypted / Open source badges; external-disk style volume icon.
+- `docs/release/RELEASE.md` is now tracked (it was hidden by an over-broad ignore pattern), so the CI docs checks pass.
+
 ## [0.1.0-alpha.2] - 2026-08-28
 
 Still a **UI preview** (the renderer runs on built-in preview data; the Electron bridge to the engines is in progress),
