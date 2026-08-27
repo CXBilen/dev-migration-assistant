@@ -1,10 +1,6 @@
-/**
- * Preload (sandboxed, single CJS bundle). Exposes exactly `window.devMigration` — a fixed set of
- * per-channel functions built in ./api.ts. Never exposes ipcRenderer, Node or the event objects.
- */
-import { contextBridge, ipcRenderer } from 'electron'
-import { createDevMigrationApi, readPreloadMeta } from './api'
+// Preload bridge — the full typed API lands with the Electron main-process wiring. Never expose ipcRenderer directly.
+import { contextBridge } from 'electron'
 
-const api = createDevMigrationApi(ipcRenderer, readPreloadMeta(process.argv, process.platform))
-
-contextBridge.exposeInMainWorld('devMigration', api)
+contextBridge.exposeInMainWorld('devMigration', {
+  meta: { appVersion: '0.1.0-alpha.4', platform: process.platform, isE2E: false },
+})
