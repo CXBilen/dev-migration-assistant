@@ -4,6 +4,7 @@
  */
 import type {
   BackupHeaderInfo,
+  ScannedArtifact,
   BackupInspection,
   BackupRequest,
   BackupResult,
@@ -38,16 +39,16 @@ export interface ProjectScanner {
 export interface BackupPlanProjectEntry {
   project: ProjectDescriptor
   /** providerId -> selected artifacts for that provider (may be empty → provider skipped) */
-  providers: Map<string, import('@devmig/model').ScannedArtifact[]>
+  providers: Map<string, ScannedArtifact[]>
 }
 
 export interface BackupPlan {
   scan: ScanSession
   projects: BackupPlanProjectEntry[]
   /** providerId -> selected global artifacts */
-  global: Map<string, import('@devmig/model').ScannedArtifact[]>
+  global: Map<string, ScannedArtifact[]>
   /** Sensitive artifacts explicitly included by the user (drives UI warnings and manifest flags). */
-  includedSensitive: import('@devmig/model').ScannedArtifact[]
+  includedSensitive: ScannedArtifact[]
   estimatedBytes: number
   warnings: string[]
 }
