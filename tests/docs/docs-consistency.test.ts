@@ -219,7 +219,7 @@ describe('README claims match the repository', () => {
     ]) {
       expect(readme, `missing section ${heading}`).toContain(heading)
     }
-    expect(readme).toContain('xattr -d com.apple.quarantine')
+    expect(readme).toContain('xattr -dr com.apple.quarantine')
     expect(readme).toContain('Argon2id')
     expect(readme).toContain('AES-256-GCM')
   })

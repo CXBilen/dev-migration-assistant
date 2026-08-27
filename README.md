@@ -30,9 +30,15 @@ project location changes.
 </p>
 
 > **Status:** v0.1.0-alpha (pre-release) · macOS 13+ · Apple Silicon · local-only, no accounts, no telemetry.
+> The `0.1.0-alpha.1` build is a UI preview on built-in data: it shows a **Preview data** badge and reads or writes
+> nothing on your machine. The bridge to the engines lands in the next alpha — see [`CHANGELOG.md`](CHANGELOG.md).
 
 <p align="center">
   <img src="docs/assets/screenshots/home.png" alt="Home screen: Create Backup and Restore Backup" width="49%" />
+  <img src="docs/assets/screenshots/backup-projects.png" alt="Create Backup wizard: select project folders" width="49%" />
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/restore.png" alt="Restore wizard, step 1 of 6: open a .devbackup file" width="49%" />
   <img src="docs/assets/screenshots/diagnostics.png" alt="Diagnostics screen: app, Claude Code and provider status" width="49%" />
 </p>
 <p align="center"><sub>Alpha screenshots — the renderer is shown on preview data while the native bridge is being wired.</sub></p>
@@ -148,17 +154,17 @@ destinations you approved. Details: [`SECURITY.md`](SECURITY.md) and
 Trust should come from what you can verify, not from what a README promises. Every row below points at something you
 can read or run.
 
-| Principle                             | What it means in practice                                                                                                                                                    | Verify it yourself                                                                                                          |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Open source, MIT**                  | Every line that touches your data is in this repository. Build it yourself with `pnpm dist:mac`.                                                                             | [LICENSE](LICENSE), [Architecture](docs/architecture/ARCHITECTURE.md)                                                       |
-| **Local only**                        | No account, no server, no telemetry, no cloud upload. The app itself makes no network requests.                                                                              | grep the code for `fetch(`/`https://` — the only ones open your browser at GitHub.                                          |
-| **Encrypted by default**              | Password → Argon2id (memory-hard) → wraps a random master key → AES-256-GCM in authenticated chunks. Truncation, reordering and tampering fail closed.                       | [Backup format spec](docs/backup-format/DEVBACKUP_SPEC.md), `packages/archive/src/*.test.ts`                                |
-| **Secrets are classified**            | `.env` files, MCP `env`/`headers`, private keys are detected and **off by default**. Credentials (OAuth tokens, Keychain items) are never migrated — you sign in again.      | `packages/core/src/security`, [Threat model](docs/security/THREAT_MODEL.md)                                                 |
-| **Backup never mutates the source**   | Providers read everywhere but can only write inside their staging directory; the boundary is enforced by a scoped filesystem, not by convention.                             | `packages/shared/src/scoped-fs.ts` and its tests                                                                            |
-| **Restore plans before writing**      | Every destination collision is listed with a non-destructive default. No write happens before you approve the plan, and writes only land inside the approved destinations.   | [ADR-0008](docs/architecture/adr/0008-restore-transactions-and-collisions.md)                                               |
-| **Backups are untrusted input**       | Validated manifest, rejected `..`/absolute/symlink entries, size and count limits, checksums on every file.                                                                  | `packages/archive/src` extraction tests                                                                                     |
-| **No hard-coded Claude internals**    | Sessions are matched by the `cwd` they record, the directory encoding is verified per machine, and only schema-owned path fields are rewritten — prose is never touched.     | [ADR-0004](docs/architecture/adr/0004-claude-project-matching.md), [ADR-0005](docs/architecture/adr/0005-path-remapping.md) |
-| **A real migration is the test gate** | The automated suite builds a fake "Mac A", backs it up, restores it as a different user on a fake "Mac B" and asserts logical equivalence — Git, worktrees, sessions, prose. | `pnpm verify` (unit + integration), `pnpm test:e2e`                                                                         |
+| Principle                             | What it means in practice                                                                                                                                                    | Verify it yourself                                                                                                                                                                                                    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Open source, MIT**                  | Every line that touches your data is in this repository. Build it yourself with `pnpm dist:mac`.                                                                             | [LICENSE](LICENSE), [Architecture](docs/architecture/ARCHITECTURE.md)                                                                                                                                                 |
+| **Local only**                        | No account, no server, no telemetry, no cloud upload. The app itself makes no network requests; restore works from the Git bundle and never fetches from a remote.           | grep the code for `fetch(`/`https://` — the only hits open your browser. The one subprocess that may reach the network is `gh auth status` on restore (10 s timeout), used only to tell you whether to sign in again. |
+| **Encrypted by default**              | Password → Argon2id (memory-hard) → wraps a random master key → AES-256-GCM in authenticated chunks. Truncation, reordering and tampering fail closed.                       | [Backup format spec](docs/backup-format/DEVBACKUP_SPEC.md), `packages/archive/src/*.test.ts`                                                                                                                          |
+| **Secrets are classified**            | `.env` files, MCP `env`/`headers`, private keys are detected and **off by default**. Credentials (OAuth tokens, Keychain items) are never migrated — you sign in again.      | `packages/core/src/security`, [Threat model](docs/security/THREAT_MODEL.md)                                                                                                                                           |
+| **Backup never mutates the source**   | Providers read everywhere but can only write inside their staging directory; the boundary is enforced by a scoped filesystem, not by convention.                             | `packages/shared/src/scoped-fs.ts` and its tests                                                                                                                                                                      |
+| **Restore plans before writing**      | Every destination collision is listed with a non-destructive default. No write happens before you approve the plan, and writes only land inside the approved destinations.   | [ADR-0008](docs/architecture/adr/0008-restore-transactions-and-collisions.md)                                                                                                                                         |
+| **Backups are untrusted input**       | Validated manifest, rejected `..`/absolute/symlink entries, size and count limits, checksums on every file.                                                                  | `packages/archive/src` extraction tests                                                                                                                                                                               |
+| **No hard-coded Claude internals**    | Sessions are matched by the `cwd` they record, the directory encoding is verified per machine, and only schema-owned path fields are rewritten — prose is never touched.     | [ADR-0004](docs/architecture/adr/0004-claude-project-matching.md), [ADR-0005](docs/architecture/adr/0005-path-remapping.md)                                                                                           |
+| **A real migration is the test gate** | The automated suite builds a fake "Mac A", backs it up, restores it as a different user on a fake "Mac B" and asserts logical equivalence — Git, worktrees, sessions, prose. | `pnpm verify` (unit + integration), `pnpm test:e2e`                                                                                                                                                                   |
 
 ## Status
 
@@ -189,14 +195,14 @@ Known gaps for v0.1 are tracked honestly in [`docs/KNOWN_LIMITATIONS.md`](docs/K
 1. Download the latest `Dev Migration Assistant-<version>-arm64.dmg` from
    [Releases](https://github.com/CXBilen/dev-migration-assistant/releases).
 2. Open the DMG and drag **Dev Migration Assistant** to `/Applications`.
-3. **v0.1 builds are not signed or notarized.** macOS Gatekeeper will refuse to open the app on the first launch.
-   Either:
-   - Right-click (Control-click) the app in Finder and choose **Open**, then confirm; or, on macOS 15 and newer, open
-     it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**; or
-   - remove the quarantine attribute from a terminal:
-     ```sh
-     xattr -d com.apple.quarantine "/Applications/Dev Migration Assistant.app"
-     ```
+3. **Alpha builds are ad-hoc signed, not notarized.** On first launch macOS says it cannot verify the developer:
+   click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (macOS 15+),
+   or right-click the app in Finder and choose **Open** (macOS 13/14). Alternatively remove the quarantine attribute:
+   ```sh
+   xattr -dr com.apple.quarantine "/Applications/Dev Migration Assistant.app"
+   ```
+   If macOS reports the app as **"damaged and can't be opened"**, the download lost its signature (very early alpha
+   builds were completely unsigned) — the `xattr` command above fixes that too.
    Signed and notarized releases are planned (see [`docs/release/RELEASE.md`](docs/release/RELEASE.md)). If you would
    rather not trust a downloaded binary, build it yourself with `pnpm dist:mac` (below).
 
@@ -217,6 +223,8 @@ pnpm dist:mac         # unsigned arm64 DMG in apps/desktop/release/
 
 Useful individual scripts: `pnpm typecheck`, `pnpm lint`, `pnpm format`, `pnpm test:unit`, `pnpm test:integration`.
 Integration tests use real `git` in temporary directories and never touch your real `~/.claude` or repositories.
+`pnpm fixture:claude --session <transcript.jsonl> --out fixtures/claude/<name>` turns one of your own transcripts into a
+sanitised, committable fixture (every string redacted, paths and ids remapped; the source is only read).
 Contributor builds are unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`); no Apple credentials are ever needed to work
 on the project.
 
