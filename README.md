@@ -1,14 +1,45 @@
-# Dev Migration Assistant
+<p align="center">
+  <img src="docs/assets/icon-256.png" width="112" alt="Dev Migration Assistant icon" />
+</p>
 
-**Migration Assistant, but for developers.**
-_Your machine. Your code. Your context._
+<h1 align="center">Dev Migration Assistant</h1>
+
+<p align="center">
+  <strong>Migration Assistant, but for developers.</strong><br />
+  <em>Your machine. Your code. Your context.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/CXBilen/dev-migration-assistant/actions/workflows/ci.yml"><img src="https://github.com/CXBilen/dev-migration-assistant/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/CXBilen/dev-migration-assistant/releases"><img src="https://img.shields.io/github/v/release/CXBilen/dev-migration-assistant?include_prereleases&label=release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license" /></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-000000?logo=apple&logoColor=white" alt="macOS 13+ Apple Silicon" />
+  <img src="https://img.shields.io/badge/local--only-no%20cloud%20%C2%B7%20no%20telemetry-2ea44f" alt="Local only" />
+  <img src="https://img.shields.io/badge/encrypted-Argon2id%20%2B%20AES--256--GCM-6f42c1" alt="Encrypted" />
+</p>
 
 An open-source macOS app that backs up the **real local state** of your active development projects into a single
 encrypted `.devbackup` file and restores it on another Mac — with safe path remapping when your username or
 project location changes.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/flow-dark.svg" />
+    <img src="docs/assets/flow-light.svg" alt="Source Mac → encrypted .devbackup → destination Mac" width="100%" />
+  </picture>
+</p>
+
 > **Status:** v0.1 (pre-release) · macOS 13+ · Apple Silicon · local-only, no accounts, no telemetry.
 > _Screenshots will be added once the UI is final._
+
+**In 30 seconds**
+
+- **Pick folders, not files.** Select the projects you are working on; the app discovers the Git state, Claude Code
+  sessions, local config and env files that belong to them — and shows you the list before anything is written.
+- **One encrypted file.** Everything is packed into a `.devbackup` you can AirDrop or copy to an SSD. Argon2id +
+  AES-256-GCM, verified end-to-end after writing.
+- **Restore where you like.** Choose a new location per project; known path references are remapped, worktrees are
+  rebuilt, Claude Code sessions resume with `claude --resume`. Nothing is written before you approve the plan.
 
 ---
 
@@ -45,7 +76,10 @@ caches, lock files and process registries. You re-authenticate on the new Mac; t
 
 ### Create Backup
 
-`DISCOVERING → SCANNING → PLANNING → SECURITY_REVIEW → COLLECTING → PACKING → ENCRYPTING → VERIFYING → COMPLETE`
+```mermaid
+flowchart LR
+  A[DISCOVERING] --> B[SCANNING] --> C[PLANNING] --> D[SECURITY_REVIEW] --> E[COLLECTING] --> F[PACKING] --> G[ENCRYPTING] --> H[VERIFYING] --> I[COMPLETE]
+```
 
 1. Pick one or more project directories with the native macOS dialog.
 2. Every provider (Claude Code, Git, project files, runtime) scans the selection **read-only** and reports what it found.
@@ -58,7 +92,11 @@ staging directory, enforced by a scoped filesystem facade.
 
 ### Restore Backup
 
-`INSPECT → DECRYPT → VALIDATE → MAP_PATHS → PREFLIGHT → STAGE → RESTORE_REPOSITORIES → RESTORE_WORKTREE_STATE → RESTORE_CLAUDE → RESTORE_PROJECT_FILES → VERIFY → REPORT`
+```mermaid
+flowchart LR
+  A[INSPECT] --> B[DECRYPT] --> C[VALIDATE] --> D[MAP_PATHS] --> E[PREFLIGHT] --> F[STAGE]
+  F --> G[RESTORE_REPOSITORIES] --> H[RESTORE_WORKTREE_STATE] --> I[RESTORE_CLAUDE] --> J[RESTORE_PROJECT_FILES] --> K[VERIFY] --> L[REPORT]
+```
 
 1. Open the `.devbackup`, enter the password, and see the manifest (projects, sessions, sizes).
 2. Map each project to its new location (defaults are suggested from your new home directory).
@@ -99,6 +137,23 @@ manifest, rejected `..`/absolute/link entries, size and count limits, checksums,
 is sandboxed and isolated behind a typed IPC whitelist, and all writes go through a scoped filesystem bound to the
 destinations you approved. Details: [`SECURITY.md`](SECURITY.md) and
 [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md).
+
+## Why you can trust it
+
+Trust should come from what you can verify, not from what a README promises. Every row below points at something you
+can read or run.
+
+| Principle                             | What it means in practice                                                                                                                                                    | Verify it yourself                                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Open source, MIT**                  | Every line that touches your data is in this repository. Build it yourself with `pnpm dist:mac`.                                                                             | [LICENSE](LICENSE), [Architecture](docs/architecture/ARCHITECTURE.md)                                                       |
+| **Local only**                        | No account, no server, no telemetry, no cloud upload. The app itself makes no network requests.                                                                              | grep the code for `fetch(`/`https://` — the only ones open your browser at GitHub.                                          |
+| **Encrypted by default**              | Password → Argon2id (memory-hard) → wraps a random master key → AES-256-GCM in authenticated chunks. Truncation, reordering and tampering fail closed.                       | [Backup format spec](docs/backup-format/DEVBACKUP_SPEC.md), `packages/archive/src/*.test.ts`                                |
+| **Secrets are classified**            | `.env` files, MCP `env`/`headers`, private keys are detected and **off by default**. Credentials (OAuth tokens, Keychain items) are never migrated — you sign in again.      | `packages/core/src/security`, [Threat model](docs/security/THREAT_MODEL.md)                                                 |
+| **Backup never mutates the source**   | Providers read everywhere but can only write inside their staging directory; the boundary is enforced by a scoped filesystem, not by convention.                             | `packages/shared/src/scoped-fs.ts` and its tests                                                                            |
+| **Restore plans before writing**      | Every destination collision is listed with a non-destructive default. No write happens before you approve the plan, and writes only land inside the approved destinations.   | [ADR-0008](docs/architecture/adr/0008-restore-transactions-and-collisions.md)                                               |
+| **Backups are untrusted input**       | Validated manifest, rejected `..`/absolute/symlink entries, size and count limits, checksums on every file.                                                                  | `packages/archive/src` extraction tests                                                                                     |
+| **No hard-coded Claude internals**    | Sessions are matched by the `cwd` they record, the directory encoding is verified per machine, and only schema-owned path fields are rewritten — prose is never touched.     | [ADR-0004](docs/architecture/adr/0004-claude-project-matching.md), [ADR-0005](docs/architecture/adr/0005-path-remapping.md) |
+| **A real migration is the test gate** | The automated suite builds a fake "Mac A", backs it up, restores it as a different user on a fake "Mac B" and asserts logical equivalence — Git, worktrees, sessions, prose. | `pnpm verify` (unit + integration), `pnpm test:e2e`                                                                         |
 
 ## Status
 
@@ -166,6 +221,16 @@ The full picture, including the reasoning behind each decision, lives in
 [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) and the ADRs in
 [`docs/architecture/adr/`](docs/architecture/adr/).
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg" />
+    <img src="docs/assets/architecture-light.svg" alt="Layered architecture: renderer → preload → main → core → providers / archive → disk" width="100%" />
+  </picture>
+</p>
+
+<details>
+<summary>Text version of the diagram</summary>
+
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │                     ELECTRON APPLICATION                     │
@@ -190,6 +255,8 @@ The full picture, including the reasoning behind each decision, lives in
 └──────────────────────────────────────────────────────────────┘
                      macOS / Disk (read on backup, written on restore only through ScopedFs)
 ```
+
+</details>
 
 Monorepo layout: `packages/model` (zod domain model), `packages/shared` (paths, `ScopedFs`, `Exec`, redaction,
 logger), `packages/archive` (the container), `packages/core` (provider contract, engines, jobs),

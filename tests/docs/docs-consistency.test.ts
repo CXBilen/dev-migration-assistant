@@ -36,7 +36,7 @@ const OWNED_DOCS = [
  * The integrator removes entries here as the files appear; an entry that exists on disk fails the test
  * so the list cannot silently outlive its purpose.
  */
-const PENDING_LINK_TARGETS = new Set<string>(['docs/backup-format/DEVBACKUP_SPEC.md'])
+const PENDING_LINK_TARGETS = new Set<string>([])
 
 interface PackageJson {
   version: string
