@@ -31,7 +31,7 @@ dmg:
   sign: false
   # Drag-and-drop layout: app on the left, Applications shortcut on the right, arrow drawn in the background image.
   background: build/background.png
-  icon: build/icon.icns
+  icon: build/dmg-icon.icns
   iconSize: 128
   window:
     width: 660
