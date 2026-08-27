@@ -8,6 +8,32 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+## [0.1.0-alpha.5] - 2026-08-28
+
+**First functional build.** The Electron bridge is wired, so Create Backup and Restore Backup now operate on your
+real projects and Claude Code data (read-only during backup; restore writes only to the destinations you approve).
+
+### Added
+
+- Electron main process: hardened window and web-contents lockdown, deny-all permission handler, single instance,
+  redacted file logging, typed IPC router (trusted-sender check, zod validation of every request and response, error
+  envelopes), native folder/file/save dialogs, job progress streaming, diagnostics, stale-staging sweep on startup.
+- Preload bridge `window.devMigration` with per-channel wrappers only (no `ipcRenderer`, no Node, no generic invoke).
+- Playwright Electron E2E suite (smoke, full backup, full restore with path remap, wrong password, cancellation)
+  driven through an inert-unless-enabled dialog seam.
+- Definition-of-Done migration test: a fake "Mac A" (Git repo with worktree, staged/unstaged/binary/untracked
+  changes, Claude sessions, memory, checkpoints, `~/.claude.json`, `.env.local`) is backed up and restored as a
+  different user at a different path on a fake "Mac B" through the real providers and the real container; asserts
+  Git equivalence, session placement, rewritten `cwd`, untouched prose and excluded secrets (9 scenarios).
+- Electron fuses on packaged builds (RunAsNode off, NODE_OPTIONS off, inspect off, ASAR-only, integrity validation)
+  and a strict production CSP.
+
+### Security
+
+- `backups:create` only accepts output paths that came from the app's own save dialog; restore destinations must be
+  absolute and under the home directory, `/Users` or `/Volumes` (or chosen through the app's dialog).
+- `system:openExternal` is limited to https links to an allow-list of hosts.
+
 ## [0.1.0-alpha.4] - 2026-08-28
 
 ### Changed

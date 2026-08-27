@@ -124,3 +124,13 @@ Where a limitation is enforced or reported by code, the test that demonstrates i
   `packages/providers/claude-code/src/merge.test.ts › ~/.claude.json merge › adds entries under the new path, backs up the original, never writes identity keys or MCP env unless selected`
 - `backup-then-replace` aside paths for repositories — validated by: `<to be filled by the integrator>` (engine-level restore test)
 - Retention warning for old sessions — validated by: `<to be filled by the integrator>`
+
+## Desktop app (v0.1 alpha)
+
+- The Playwright E2E suite drives the built `out/` tree with the stock Electron binary; the packaged `.app` cannot be
+  driven by Playwright because its fuses disable `--inspect`. The packaged app is verified by launching it directly.
+- The Backup Review screen counts the primary worktree plus linked worktrees, while the manifest counts linked
+  worktrees only.
+- Stale staging directories left by a crash are removed on the next start only when older than 24 hours.
+- In `electron-vite dev` the renderer relies on the meta CSP in `index.html`; packaged builds get the strict
+  production CSP.

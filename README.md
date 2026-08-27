@@ -41,7 +41,7 @@ project location changes.
   <img src="docs/assets/screenshots/restore.png" alt="Restore wizard, step 1 of 6: open a .devbackup file" width="49%" />
   <img src="docs/assets/screenshots/diagnostics.png" alt="Diagnostics screen: app, Claude Code and provider status" width="49%" />
 </p>
-<p align="center"><sub>Alpha screenshots — the renderer is shown on preview data while the native bridge is being wired.</sub></p>
+<p align="center"><sub>Alpha screenshots.</sub></p>
 
 **In 30 seconds**
 
