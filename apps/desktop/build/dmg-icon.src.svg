@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e3e7ec"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b9c1cc"/><stop offset="1" stop-color="#8a95a3"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f2937"/><stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="card2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#0f172a" flood-opacity="0.32"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- external disk body: thick slab with a visible front edge (macOS disk-image feel) -->
+  <g filter="url(#drop)">
+    <!-- front/bottom edge -->
+    <rect x="96" y="330" width="832" height="470" rx="96" fill="url(#side)"/>
+    <!-- top face -->
+    <rect x="96" y="290" width="832" height="440" rx="96" fill="url(#top)"/>
+  </g>
+  <!-- edge highlight line between faces -->
+  <rect x="120" y="720" width="784" height="4" rx="2" fill="#ffffff" opacity="0.55"/>
+  <!-- top face sheen -->
+  <rect x="140" y="312" width="744" height="26" rx="13" fill="url(#sheen)"/>
+  <!-- activity LED + grip lines, bottom-right of the top face -->
+  <circle cx="846" cy="676" r="12" fill="#22c55e"/>
+  <circle cx="846" cy="676" r="6" fill="#bbf7d0"/>
+  <rect x="150" y="668" width="120" height="8" rx="4" fill="#c7cdd6"/>
+  <rect x="150" y="688" width="84" height="8" rx="4" fill="#d5dae2"/>
+  <!-- the app icon, floating on the drive -->
+  <g transform="translate(297 190) scale(0.42)" filter="url(#soft)">
+    <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#bg)"/>
+    <rect x="236" y="300" width="360" height="300" rx="40" fill="url(#card)" opacity="0.95"/>
+    <rect x="284" y="356" width="200" height="22" rx="11" fill="#94a3b8"/>
+    <rect x="284" y="410" width="264" height="22" rx="11" fill="#cbd5e1"/>
+    <rect x="284" y="464" width="150" height="22" rx="11" fill="#cbd5e1"/>
+    <rect x="428" y="424" width="360" height="300" rx="40" fill="url(#card2)"/>
+    <rect x="476" y="480" width="200" height="22" rx="11" fill="#dbeafe" opacity="0.9"/>
+    <rect x="476" y="534" width="264" height="22" rx="11" fill="#bfdbfe" opacity="0.8"/>
+    <rect x="476" y="588" width="150" height="22" rx="11" fill="#bfdbfe" opacity="0.8"/>
+    <path d="M300 650 Q300 800 440 800 L620 800" fill="none" stroke="#f8fafc" stroke-width="30" stroke-linecap="round"/>
+    <path d="M580 752 L646 800 L580 848" fill="none" stroke="#f8fafc" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="744" cy="336" r="92" fill="#ef4444"/>
+    <rect x="704" y="330" width="80" height="62" rx="14" fill="#fff"/>
+    <path d="M718 330 V308 a26 26 0 0 1 52 0 V330" fill="none" stroke="#fff" stroke-width="16"/>
+  </g>
+</svg>
