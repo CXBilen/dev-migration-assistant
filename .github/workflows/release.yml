@@ -1,0 +1,211 @@
+# Release — builds the macOS DMG on a `v*` tag (or manually) and attaches it to a DRAFT GitHub release.
+#
+# Design notes
+# - Unsigned by default: CSC_IDENTITY_AUTO_DISCOVERY=false, no Apple credentials needed. Forks can run this.
+# - Signing/notarization steps are present but run ONLY when the repository has the secrets:
+#     CSC_LINK + CSC_KEY_PASSWORD                                  → code signing (Developer ID Application .p12, base64)
+#     APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID      → notarization (Apple ID flow), or
+#     APPLE_API_KEY (base64 .p8) + APPLE_API_KEY_ID + APPLE_API_ISSUER → notarization (App Store Connect API key)
+#   None of these are ever required for contributor PRs; ci.yml uses no secrets at all.
+# - The checked-in electron-builder.yml keeps `notarize: false`; the signed step layers a CI-only config
+#   (`extends: ./electron-builder.yml`) that turns notarization on and forces code signing so a missing
+#   certificate fails loudly instead of producing a silently unsigned "signed" build.
+# - The release is created as a DRAFT with generated notes; a maintainer pastes the CHANGELOG section and publishes.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: '1'
+  # Never let electron-builder go looking for a signing identity in the runner keychain.
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  build:
+    name: Build macOS DMG (arm64)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      signed: ${{ steps.signing.outputs.sign }}
+      notarized: ${{ steps.signing.outputs.notarize }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node (version from .nvmrc, pnpm store cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Git identity for integration tests
+        run: |
+          git config --global user.name "devmig-ci"
+          git config --global user.email "devmig-ci@users.noreply.github.com"
+          git config --global init.defaultBranch main
+
+      - name: Read version and check it matches the tag
+        id: meta
+        run: |
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          root_version="$(node -p "require('./package.json').version")"
+          if [ "$version" != "$root_version" ]; then
+            echo "::error::apps/desktop/package.json ($version) and package.json ($root_version) versions differ"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/v}"
+            if [ "$tag" != "$version" ]; then
+              echo "::error::Tag v$tag does not match package version $version"
+              exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify (typecheck · lint · format · unit · integration · build)
+        run: pnpm verify
+
+      - name: Detect signing and notarization secrets
+        id: signing
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          sign=false
+          notarize=false
+          if [ -n "$CSC_LINK" ] && [ -n "$CSC_KEY_PASSWORD" ]; then
+            sign=true
+            if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+              notarize=true
+            elif [ -n "$APPLE_API_KEY" ] && [ -n "$APPLE_API_KEY_ID" ] && [ -n "$APPLE_API_ISSUER" ]; then
+              notarize=true
+            fi
+          fi
+          api_key=false
+          if [ "$notarize" = true ] && [ -z "$APPLE_ID" ] && [ -n "$APPLE_API_KEY" ]; then
+            api_key=true
+          fi
+          echo "sign=$sign" >> "$GITHUB_OUTPUT"
+          echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
+          echo "api_key=$api_key" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Release build::code signing: $sign · notarization: $notarize (API key flow: $api_key)"
+
+      # ---------------------------------------------------------------- unsigned (default) ----
+      - name: Build unsigned DMG
+        if: steps.signing.outputs.sign != 'true'
+        run: pnpm dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # ---------------------------------------------------------------- signed (secrets present) ----
+      - name: Prepare App Store Connect API key file
+        if: steps.signing.outputs.api_key == 'true'
+        env:
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_B64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Write CI signing config (extends electron-builder.yml)
+        if: steps.signing.outputs.sign == 'true'
+        run: |
+          cat > apps/desktop/electron-builder.ci-signed.yml <<'EOF'
+          extends: ./electron-builder.yml
+          forceCodeSigning: true
+          mac:
+            notarize: ${{ steps.signing.outputs.notarize }}
+          EOF
+          cat apps/desktop/electron-builder.ci-signed.yml
+
+      - name: Build signed DMG
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # electron-builder expects a PATH to the .p8 here; the secret holds base64, decoded above.
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          pnpm --filter @devmig/desktop exec electron-vite build
+          pnpm --filter @devmig/desktop exec electron-builder --mac --arm64 --config electron-builder.ci-signed.yml
+
+      - name: Verify signature and notarization
+        if: steps.signing.outputs.sign == 'true'
+        run: |
+          app="apps/desktop/release/mac-arm64/Dev Migration Assistant.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --verbose --type exec "$app"
+          if [ "${{ steps.signing.outputs.notarize }}" = "true" ]; then
+            xcrun stapler validate "$app"
+          fi
+
+      - name: Remove decoded API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8" apps/desktop/electron-builder.ci-signed.yml
+
+      # ---------------------------------------------------------------- artifacts ----
+      - name: Checksums
+        id: sums
+        run: |
+          cd apps/desktop/release
+          ls -la
+          shasum -a 256 *.dmg > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload DMG and checksums as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-migration-assistant-${{ steps.meta.outputs.version }}-arm64
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          name: v${{ steps.meta.outputs.version }}
+          body: |
+            **Build:** macOS Apple Silicon (arm64) · code signing: `${{ steps.signing.outputs.sign }}` · notarization: `${{ steps.signing.outputs.notarize }}`
+
+            Unsigned builds need right-click → Open (or `xattr -d com.apple.quarantine`) on first launch — see the README.
+            Verify your download with `shasum -a 256 -c SHA256SUMS.txt`.
+
+            _Maintainer: paste the CHANGELOG section for this version above the generated notes before publishing._
+          files: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/SHA256SUMS.txt
+          fail_on_unmatched_files: true

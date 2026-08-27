@@ -1,0 +1,127 @@
+# Continuous integration — runs on every push to main and every pull request.
+#
+# Design notes
+# - macOS Apple Silicon runner (`macos-latest` is arm64) because the integration tests use real `git`
+#   and the app itself is macOS-only; the Electron binary is downloaded by `pnpm install`.
+# - pnpm version comes from `packageManager` in package.json (pnpm/action-setup reads it when no
+#   `version` input is given); Node version comes from `.nvmrc`.
+# - No secrets are used at all; forks and contributor PRs run exactly this.
+# - `verify` mirrors `pnpm verify` step by step so a failure is attributable in the job log.
+# - `e2e` reuses the built app from `verify` (artifact) and runs Playwright against Electron.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: '1'
+
+jobs:
+  verify:
+    name: Verify (typecheck · lint · format · unit · integration · build)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node (version from .nvmrc, pnpm store cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Git identity for integration tests
+        # Fixture builders set their own author/committer env, but a global identity keeps any
+        # plain `git commit` in a test from failing on a fresh runner.
+        run: |
+          git config --global user.name "devmig-ci"
+          git config --global user.email "devmig-ci@users.noreply.github.com"
+          git config --global init.defaultBranch main
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Integration tests (real git in temp dirs)
+        run: pnpm test:integration
+
+      - name: Build (electron-vite)
+        run: pnpm build
+
+      - name: Upload built app for the E2E job
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-out
+          path: apps/desktop/out
+          retention-days: 1
+          if-no-files-found: error
+
+  e2e:
+    name: E2E (Playwright + Electron)
+    needs: verify
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node (version from .nvmrc, pnpm store cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download built app
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-out
+          path: apps/desktop/out
+
+      - name: Playwright E2E
+        # The E2E harness launches the built app with DEVMIG_E2E=1 itself (test seam for native dialogs).
+        # No browsers are needed: Playwright drives the Electron binary from node_modules.
+        run: pnpm test:e2e
+        continue-on-error: false
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+          if-no-files-found: ignore

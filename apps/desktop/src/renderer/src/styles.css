@@ -1,1 +1,190 @@
 @import 'tailwindcss';
+
+/*
+ * Design tokens. Static tokens live in @theme; colour tokens are declared `inline` so they
+ * resolve to CSS variables that switch with prefers-color-scheme at runtime.
+ */
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter', system-ui,
+    'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Roboto Mono', monospace;
+  --radius-panel: 10px;
+  --radius-control: 7px;
+  --text-2xs: 11px;
+  --text-2xs--line-height: 14px;
+  --shadow-panel: 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-sidebar: var(--sidebar);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-focus: var(--focus);
+  --color-control: var(--control);
+  --color-control-hover: var(--control-hover);
+}
+
+:root {
+  color-scheme: light dark;
+  --canvas: #f4f4f6;
+  --panel: #ffffff;
+  --panel-2: #f8f8fa;
+  --sidebar: rgba(236, 236, 240, 0.72);
+  --control: #ffffff;
+  --control-hover: #f2f2f5;
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --fg: #1d1d1f;
+  --fg-muted: #616168;
+  --fg-faint: #86868b;
+  --accent: #0b63cf;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(11, 99, 207, 0.1);
+  --ok: #1a7a38;
+  --ok-soft: rgba(26, 122, 56, 0.1);
+  --warn: #8f5f00;
+  --warn-soft: rgba(196, 130, 0, 0.12);
+  --danger: #bd1f2b;
+  --danger-soft: rgba(189, 31, 43, 0.09);
+  --info: #5a5f68;
+  --info-soft: rgba(90, 95, 104, 0.1);
+  --focus: #0b63cf;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #1c1c1e;
+    --panel: #262628;
+    --panel-2: #2d2d30;
+    --sidebar: rgba(36, 36, 40, 0.62);
+    --control: #333336;
+    --control-hover: #3b3b3f;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.2);
+    --fg: #f2f2f4;
+    --fg-muted: #a8a8ae;
+    --fg-faint: #7f7f86;
+    --accent: #5aa2ff;
+    --accent-fg: #061020;
+    --accent-soft: rgba(90, 162, 255, 0.16);
+    --ok: #55c57e;
+    --ok-soft: rgba(85, 197, 126, 0.14);
+    --warn: #e6b455;
+    --warn-soft: rgba(230, 180, 85, 0.14);
+    --danger: #ff6f73;
+    --danger-soft: rgba(255, 111, 115, 0.14);
+    --info: #a3a7b0;
+    --info-soft: rgba(163, 167, 176, 0.12);
+    --focus: #7ab6ff;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: transparent;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Text that people will want to copy. */
+.selectable,
+input,
+textarea,
+pre,
+code {
+  user-select: text;
+}
+
+/* macOS titlebar: hiddenInset window, 52px drag region. */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.no-drag,
+button,
+a,
+input,
+select,
+textarea,
+[role='button'],
+[role='switch'],
+[role='checkbox'],
+[role='radio'] {
+  -webkit-app-region: no-drag;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fg) 18%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--fg) 30%, transparent);
+  background-clip: padding-box;
+}
+
+@keyframes devmig-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: devmig-spin 1.1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

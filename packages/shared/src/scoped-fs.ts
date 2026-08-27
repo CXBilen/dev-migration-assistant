@@ -1,5 +1,12 @@
-import { promises as fs, type Dirent, type Stats } from 'node:fs'
+import {
+  createReadStream,
+  createWriteStream,
+  promises as fs,
+  type Dirent,
+  type Stats,
+} from 'node:fs'
 import path from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import { MigrationError } from './errors'
 import { canonicalizePath, isPathWithin } from './paths'
 
@@ -26,7 +33,31 @@ export class ScopedFs {
     return this.roots.find((r) => isPathWithin(r, t))
   }
 
-  /** Throws PATH_OUTSIDE_ALLOWED_ROOT unless target is within a root, including after symlink resolution of existing ancestors. */
+  /**
+   * Resolves symlinks in the EXISTING part of a path and re-appends the non-existent remainder,
+   * so paths that do not exist yet (new roots, new files) can still be checked for symlink escapes.
+   */
+  private static async resolveReal(p: string): Promise<string> {
+    let probe = canonicalizePath(p)
+    const remainder: string[] = []
+    for (;;) {
+      try {
+        const real = await fs.realpath(probe)
+        return remainder.length ? path.join(real, ...remainder.reverse()) : real
+      } catch {
+        const parent = path.dirname(probe)
+        if (parent === probe) return probe
+        remainder.push(path.basename(probe))
+        probe = parent
+      }
+    }
+  }
+
+  /**
+   * Throws PATH_OUTSIDE_ALLOWED_ROOT unless target is within a root — both as written (canonical) and after
+   * resolving symlinks in the existing part of the path. Roots that do not exist yet are allowed (they may be
+   * created by the caller); a symlink inside a root that points elsewhere is rejected.
+   */
   async assertAllowed(target: string): Promise<string> {
     const canonical = canonicalizePath(target)
     const root = this.rootFor(canonical)
@@ -39,28 +70,18 @@ export class ScopedFs {
         },
       )
     }
-    // Resolve the nearest existing ancestor and make sure symlinks did not redirect us elsewhere.
-    let probe = canonical
-    for (;;) {
-      try {
-        const real = await fs.realpath(probe)
-        const realRoot = await fs.realpath(root).catch(() => root)
-        if (!isPathWithin(realRoot, real) && !this.roots.some((r) => isPathWithin(r, real))) {
-          throw new MigrationError(
-            'PATH_OUTSIDE_ALLOWED_ROOT',
-            `Symlink escapes the approved destination: ${canonical}`,
-            {
-              details: { path: canonical, resolved: real },
-            },
-          )
-        }
-        break
-      } catch (err) {
-        if (err instanceof MigrationError) throw err
-        const parent = path.dirname(probe)
-        if (parent === probe) break
-        probe = parent
-      }
+    const [realTarget, realRoot] = await Promise.all([
+      ScopedFs.resolveReal(canonical),
+      ScopedFs.resolveReal(root),
+    ])
+    if (!isPathWithin(realRoot, realTarget)) {
+      throw new MigrationError(
+        'PATH_OUTSIDE_ALLOWED_ROOT',
+        `Symlink escapes the approved destination: ${canonical}`,
+        {
+          details: { path: canonical, resolved: realTarget, root: realRoot },
+        },
+      )
     }
     return canonical
   }
@@ -125,6 +146,31 @@ export class ScopedFs {
     const target = await this.assertAllowed(dest)
     await fs.mkdir(path.dirname(target), { recursive: true })
     await fs.copyFile(src, target)
+  }
+  /** Streaming atomic copy: temp file in the destination directory + fsync (flush) + rename; preserves or sets the mode. */
+  async copyFileAtomic(src: string, dest: string, mode?: number): Promise<void> {
+    const target = await this.assertAllowed(dest)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    const finalMode = mode ?? (await fs.stat(src)).mode & 0o777
+    const tmp = path.join(
+      path.dirname(target),
+      `.${path.basename(target)}.${process.pid}.${Date.now()}.tmp`,
+    )
+    try {
+      await pipeline(
+        createReadStream(src),
+        createWriteStream(tmp, { mode: finalMode, flush: true }),
+      )
+      await fs.chmod(tmp, finalMode)
+      await fs.rename(tmp, target)
+    } catch (err) {
+      await fs.rm(tmp, { force: true })
+      throw err
+    }
+  }
+  async chmod(p: string, mode: number): Promise<void> {
+    const target = await this.assertAllowed(p)
+    await fs.chmod(target, mode)
   }
   /** Recursive copy that never follows symlinks (symlinks are skipped and reported). Returns files copied and skipped symlinks. */
   async copyDir(

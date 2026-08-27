@@ -1,0 +1,16 @@
+{
+  "// purpose": "Nearest tsconfig for the renderer tree: gives Vite/esbuild the automatic JSX runtime for *.test.tsx run by Vitest and lets ESLint's project service type-check test files. Type-checking of production code is still driven by ../../tsconfig.web.json (which excludes tests).",
+  "extends": "../../tsconfig.web.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["vite/client"],
+    "paths": { "@renderer/*": ["./src/*"] }
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": []
+}

@@ -44,6 +44,9 @@
       "path": "tests/e2e"
     },
     {
+      "path": "tests/docs"
+    },
+    {
       "path": "tsconfig.tooling.json"
     }
   ]
