@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "out/types-node",
+    "emitDeclarationOnly": true,
+    "types": ["node", "electron-vite/node"],
+    "paths": { "@main/*": ["./src/main/*"] }
+  },
+  "include": ["src/main/**/*", "src/preload/**/*"],
+  "exclude": ["src/main/**/*.test.ts", "src/preload/**/*.test.ts"],
+  "references": [
+    { "path": "../../packages/model" },
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/archive" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/ipc-contracts" },
+    { "path": "../../packages/providers/claude-code" },
+    { "path": "../../packages/providers/git" },
+    { "path": "../../packages/providers/project-files" },
+    { "path": "../../packages/providers/runtime" }
+  ]
+}

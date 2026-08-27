@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../out/types-scripts",
+    "emitDeclarationOnly": true
+  },
+  "include": ["./**/*.ts"],
+  "references": [
+    { "path": "../packages/model" },
+    { "path": "../packages/shared" },
+    { "path": "../packages/core" },
+    { "path": "../packages/providers/claude-code" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src/renderer",
+    "outDir": "out/types-web",
+    "emitDeclarationOnly": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "paths": { "@renderer/*": ["./src/renderer/src/*"] }
+  },
+  "include": ["src/renderer/**/*"],
+  "exclude": ["src/renderer/**/*.test.ts", "src/renderer/**/*.test.tsx"],
+  "references": [{ "path": "../../packages/model" }, { "path": "../../packages/ipc-contracts" }]
+}

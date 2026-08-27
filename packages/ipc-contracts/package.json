@@ -1,0 +1,19 @@
+{
+  "name": "@devmig/ipc-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed, zod-validated IPC contracts between renderer, preload and main. Isomorphic (no Node imports).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devmig/model": "workspace:*",
+    "zod": "^4.4.3"
+  }
+}

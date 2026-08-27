@@ -1,0 +1,50 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/model"
+    },
+    {
+      "path": "packages/shared"
+    },
+    {
+      "path": "packages/archive"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/providers/claude-code"
+    },
+    {
+      "path": "packages/providers/git"
+    },
+    {
+      "path": "packages/providers/project-files"
+    },
+    {
+      "path": "packages/providers/runtime"
+    },
+    {
+      "path": "packages/ipc-contracts"
+    },
+    {
+      "path": "packages/test-utils"
+    },
+    {
+      "path": "apps/desktop/tsconfig.node.json"
+    },
+    {
+      "path": "apps/desktop/tsconfig.web.json"
+    },
+    {
+      "path": "scripts"
+    },
+    {
+      "path": "tests/e2e"
+    },
+    {
+      "path": "tsconfig.tooling.json"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "dev-migration-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Migration Assistant, but for developers. Back up and restore the real local state of your projects \u2014 Claude Code sessions, Git working trees, worktrees and local config \u2014 between Macs.",
+  "license": "MIT",
+  "author": "Cem Bilen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CXBilen/dev-migration-assistant.git"
+  },
+  "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @devmig/desktop dev",
+    "build": "pnpm --filter @devmig/desktop build",
+    "dist:mac": "pnpm --filter @devmig/desktop dist:mac",
+    "typecheck": "tsc -b tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit --project renderer",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "fixture:claude": "tsx scripts/fixture-claude.ts",
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test:unit && pnpm test:integration && pnpm build",
+    "verify:e2e": "pnpm build && pnpm test:e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.13.3",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.5",
+    "globals": "^17.11.0",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
+  }
+}

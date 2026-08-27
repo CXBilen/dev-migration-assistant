@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+  - packages/providers/*
+allowBuilds:
+  electron: true
+  esbuild: true
+  '@swc/core': true
+  electron-winstaller: false

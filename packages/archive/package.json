@@ -1,0 +1,22 @@
+{
+  "name": "@devmig/archive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The .devbackup container: streaming tar payload, chunked AES-256-GCM encryption with Argon2id password KDF, checksums, hardened extraction. UI-independent.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devmig/model": "workspace:*",
+    "@devmig/shared": "workspace:*",
+    "hash-wasm": "^4.12.0",
+    "tar": "^7.5.22",
+    "zod": "^4.4.3"
+  }
+}

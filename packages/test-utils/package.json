@@ -1,0 +1,19 @@
+{
+  "name": "@devmig/test-utils",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared test fixtures: temp git repos with worktrees/staged/unstaged/untracked/binary changes, fake Claude config dirs with sessions, temp homes.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devmig/model": "workspace:*",
+    "@devmig/shared": "workspace:*"
+  }
+}

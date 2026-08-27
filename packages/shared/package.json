@@ -1,0 +1,19 @@
+{
+  "name": "@devmig/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Node-side shared utilities: path canonicalization, scoped filesystem, exec, redaction, logging, errors.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devmig/model": "workspace:*",
+    "execa": "^10.0.1"
+  }
+}

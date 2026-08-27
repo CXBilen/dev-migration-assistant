@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "out/types-tooling",
+    "emitDeclarationOnly": true,
+    "types": ["node"]
+  },
+  "include": ["vitest.config.ts", "apps/desktop/electron.vite.config.ts"]
+}

@@ -1,0 +1,11 @@
+node_modules
+dist
+out
+release
+coverage
+pnpm-lock.yaml
+CHANGELOG.md
+fixtures/**/*.jsonl
+*.tsbuildinfo
+playwright-report
+test-results

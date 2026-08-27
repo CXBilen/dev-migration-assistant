@@ -1,0 +1,23 @@
+{
+  "name": "@devmig/provider-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devmig/core": "workspace:*",
+    "@devmig/model": "workspace:*",
+    "@devmig/shared": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@devmig/test-utils": "workspace:*"
+  }
+}

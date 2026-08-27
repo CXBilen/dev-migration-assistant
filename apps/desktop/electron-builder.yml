@@ -1,0 +1,39 @@
+appId: com.cxbilen.devmigrationassistant
+productName: Dev Migration Assistant
+copyright: Copyright © 2026 Cem Bilen
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+asar: true
+asarUnpack:
+  - '**/*.node'
+  - '**/hash-wasm/**'
+npmRebuild: false
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  darkModeSupport: true
+  minimumSystemVersion: '13.0'
+  # Signing / notarization are configured via environment (see docs/release/RELEASE.md);
+  # local contributor builds are unsigned: CSC_IDENTITY_AUTO_DISCOVERY=false
+  notarize: false
+dmg:
+  sign: false
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+publish: null
