@@ -7,6 +7,7 @@ dist/
 out/
 release/
 build/
+!apps/desktop/build/
 *.tsbuildinfo
 .vite/
 
