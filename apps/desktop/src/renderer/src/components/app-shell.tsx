@@ -28,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }): React.JSX
         <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-3">
           <Link
             to={ROUTES.home}
-            className="mb-4 flex items-center gap-2 rounded-control px-2 py-1 text-[13px] font-semibold text-fg hover:bg-control-hover"
+            className="mb-4 flex min-w-0 items-center gap-2 rounded-control px-1.5 py-1 text-[13px] font-semibold tracking-[-0.01em] whitespace-nowrap text-fg hover:bg-control-hover"
             data-testid="sidebar-home"
           >
             <img

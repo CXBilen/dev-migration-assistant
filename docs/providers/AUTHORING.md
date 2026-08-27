@@ -234,7 +234,9 @@ relying on them — treat everything below as a starting point, not a specificat
 
 ```ts
 // packages/providers/codex/src/codex-provider.ts
+import { createReadStream } from 'node:fs'
 import path from 'node:path'
+import readline from 'node:readline'
 import { z } from 'zod'
 import type {
   BackupContext,
@@ -448,9 +450,10 @@ export class CodexProvider implements MigrationProvider {
     ctx: RestoreContext,
   ): Promise<ProviderRestoreResult> {
     const dest = z.string().parse(plan.state.dest)
-    // For each payload file: read → validate records → rewrite `cwd` with ctx.mapPath → ctx.fs.writeFileAtomic(destFile)
+    await ctx.fs.mkdir(dest) // throws PATH_OUTSIDE_ALLOWED_ROOT unless dest lies inside an approved root
+    // For each payload file: stream records → validate with SessionRecord → rewrite `cwd` with ctx.mapPath
+    // → ctx.fs.writeFileAtomic(path.join(dest, name), rewritten). Prose is never touched (ADR-0005).
     void input
-    void dest
     return {
       providerId: this.id,
       projectId: plan.projectId,
@@ -489,8 +492,27 @@ export function createCodexProvider(): MigrationProvider {
   return new CodexProvider()
 }
 
-async function readFirstCwd(_file: string): Promise<string | undefined> {
-  // Stream the first N lines, JSON.parse each, validate with SessionRecord, return the first cwd. Never read the whole file.
+/** Streams the first records of a JSONL session file and returns the first `cwd`. Never reads the whole file. */
+async function readFirstCwd(file: string, maxRecords = 50): Promise<string | undefined> {
+  const rl = readline.createInterface({ input: createReadStream(file, { encoding: 'utf8' }) })
+  let seen = 0
+  try {
+    for await (const line of rl) {
+      if (line.trim() === '') continue
+      let raw: unknown
+      try {
+        raw = JSON.parse(line)
+      } catch {
+        continue // invalid lines are tolerated on scan; restore copies them verbatim
+      }
+      const parsed = SessionRecord.safeParse(raw)
+      if (parsed.success && parsed.data.cwd) return parsed.data.cwd
+      seen += 1
+      if (seen >= maxRecords) break
+    }
+  } finally {
+    rl.close()
+  }
   return undefined
 }
 ```

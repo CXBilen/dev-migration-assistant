@@ -65,13 +65,22 @@ export interface RestoreEngine {
   readHeader(backupPath: string): Promise<BackupHeaderInfo>
   inspect(backupPath: string, password: string, ctx?: JobRunContext): Promise<BackupInspection>
   /** Dry-run remap analysis for the Restore Mapping screen (no writes). */
-  previewRemap(backupPath: string, password: string, mappings: PathMapping[], ctx?: JobRunContext): Promise<PathRemapReport>
+  previewRemap(
+    backupPath: string,
+    password: string,
+    mappings: PathMapping[],
+    ctx?: JobRunContext,
+  ): Promise<PathRemapReport>
   /** Extracts to private staging, validates, runs provider planning + preflight. No destination writes. */
   plan(request: RestorePlanRequest, ctx: JobRunContext): Promise<RestorePlan>
   /** Executes an approved plan (kept in memory by id) and verifies. */
   execute(request: RestoreExecuteRequest, ctx: JobRunContext): Promise<RestoreResult>
   /** Streams through a backup verifying every chunk + checksum. */
-  verify(backupPath: string, password: string, ctx: JobRunContext): Promise<{ ok: boolean; entries: number; bytes: number }>
+  verify(
+    backupPath: string,
+    password: string,
+    ctx: JobRunContext,
+  ): Promise<{ ok: boolean; entries: number; bytes: number }>
   getPlan(planId: string): RestorePlan | undefined
   /** Removes staging directories for finished plans. Safe to call repeatedly. */
   cleanup(): Promise<void>
@@ -86,7 +95,11 @@ export interface CoreServices {
   planner: MigrationPlanner
   backup: BackupEngine
   restore: RestoreEngine
-  diagnostics(input: { appVersion: string; electronVersion: string | null; logsDirectory: string }): Promise<Diagnostics>
+  diagnostics(input: {
+    appVersion: string
+    electronVersion: string | null
+    logsDirectory: string
+  }): Promise<Diagnostics>
   /** Releases temp dirs; called on app quit. */
   dispose(): Promise<void>
 }
