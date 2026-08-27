@@ -2,6 +2,12 @@ packages:
   - apps/*
   - packages/*
   - packages/providers/*
+
+# pnpm settings (pnpm ≥ 10 reads these from pnpm-workspace.yaml)
+nodeLinker: isolated
+verifyDepsBeforeRun: warn
+strictPeerDependencies: false
+autoInstallPeers: true
 allowBuilds:
   electron: true
   esbuild: true
