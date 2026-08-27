@@ -9,3 +9,4 @@ fixtures/**/*.jsonl
 *.tsbuildinfo
 playwright-report
 test-results
+apps/desktop/build/
