@@ -37,10 +37,12 @@ easiest place to contribute.
   supports it; it only needs the certificate secrets.
 - Homebrew cask.
 
-**Quality**
+**Quality and safety**
 
-- Fixture generator (`pnpm fixture:claude`) producing sanitised, committed Claude Code fixtures from a real machine.
+- Blocking `CLAUDE_RUNNING` preflight (v0.1 warns) and a startup sweep of leftover staging directories.
 - Larger E2E matrix: collision policies, cancellation, wrong password, tampered file.
+- More committed fixtures from `pnpm fixture:claude` (sanitised transcripts covering worktree sessions, `/cd`,
+  subagents).
 
 ## v0.3 — the rest of the machine
 
@@ -50,6 +52,7 @@ easiest place to contribute.
   a manifest (nvm, fnm, volta, mise); restore reports what to install.
 - **Docker**: named volumes and compose project state for selected projects (opt-in, sizes shown up front).
 - **Ghostty** and other terminal configs as user-scoped artifacts.
+- Headless CLI (`devmig backup` / `devmig restore --plan`) on top of `@devmig/core` for scripted migrations.
 - Selective restore of individual sessions; search inside a backup's manifest.
 - Scheduled/incremental backups (append-only session deltas).
 

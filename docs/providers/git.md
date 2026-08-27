@@ -76,22 +76,30 @@ stripped from the environment.
 
 ## Restore algorithm
 
-1. **Collision check** — a non-empty destination is a `directory-exists` (or `git-repo-exists`)
+1. **Destination** — the repository (primary worktree) is restored at the project's mapped path. When
+   the selected directory was itself a linked worktree, the primary is restored at
+   `ctx.mapPath(<primary path>)` (core derives that sibling mapping) and the selected worktree at the
+   project destination; the plan says so in a warning. A destination that does not exist is created
+   (0755) by the provider; an empty directory is fine.
+2. **Collision check** — a non-empty destination is a `directory-exists` (or `git-repo-exists`)
    collision with policies `skip` (default) and `backup-then-replace` (the directory is renamed to
-   `<dest>.devmig-backup-<timestamp>`; this requires the engine to approve that sibling path, see
-   Limitations). Existing linked-worktree paths are `worktree-path-exists` collisions with the same policies.
-2. **Repository** — `mkdir` (0755) through `ScopedFs`, `git init`, point HEAD at the captured branch,
+   `<dest>.devmig-backup-<timestamp>`). Existing linked-worktree paths are `worktree-path-exists`
+   collisions with the same policies. Every aside path the plan may create is listed in the plan state
+   (`state.asidePaths`, also available through `backupAsidePathsFrom(state)`) so the engine can add
+   them to the approved `ScopedFs` roots when the decision is `backup-then-replace`; without that
+   approval the move fails closed with `PATH_OUTSIDE_ALLOWED_ROOT` and a hint to choose `skip`.
+3. **Repository** — `mkdir` (0755) through `ScopedFs`, `git init`, point HEAD at the captured branch,
    verify + fetch the bundle (`--update-head-ok` lets the unborn current branch be populated), then
    `reset --hard` (attached) or `checkout --detach <sha>` (detached). Repositories without commits are
    only initialised. Remotes and upstream configuration are re-created from `repository.json`.
-3. **Worktrees** — for each linked worktree whose state artifact was selected: destination =
+4. **Worktrees** — for each linked worktree whose state artifact was selected: destination =
    `ctx.mapPath(oldPath)` (core derives sibling/child mappings), `git worktree add` (branch, or
    `--detach <sha>`). A branch that is already checked out elsewhere is skipped with a warning.
-4. **Working tree state** — per worktree: `git apply --index` of `staged.diff`, then `git apply` of
+5. **Working tree state** — per worktree: `git apply --index` of `staged.diff`, then `git apply` of
    `unstaged.diff`, then copy `untracked/` (and `untracked-sensitive/` when selected) preserving modes.
    If an apply fails the repository stays restored, the outcome is `partial` with a `GIT_APPLY_FAILED`
    item and the diff files are placed in `<worktree>/.devmig-unapplied/`.
-5. **Ignored entries** — copied to their original relative path; existing files are never overwritten.
+6. **Ignored entries** — copied to their original relative path; existing files are never overwritten.
 
 Every mutating git call first passes its `cwd` through `ctx.fs.assertAllowed` (symlink-checked), and
 `core.hooksPath=/dev/null` guarantees that neither template hooks nor anything inside the restored
@@ -106,7 +114,7 @@ content runs during the restore (covered by an integration test with a template-
 | `bundle`                | yes      | Bundle present in the payload and readable (`git bundle list-heads`).                       |
 | `bundle-required`       | yes      | Working-tree state was selected without the repository bundle (and the source had commits). |
 | `branch:<name>`, `head` | yes      | Branch names / shas in `repository.json` pass local validation and `git check-ref-format`.  |
-| `destination`           | yes/no   | Fails when the destination is a file; passes for missing or empty directories.              |
+| `destination`           | yes/no   | Fails when the destination is a file; passes for missing ("will be created") or empty dirs. |
 | `worktree-state:<n>`    | yes      | `worktrees/<n>/state.json` parses.                                                          |
 
 Remap report: every recreated linked worktree counts as one safe rewrite; there are no unsupported
@@ -125,8 +133,9 @@ with the expected branches, and `git remote -v` must match. Each check is a `Ver
 
 - **Stashes, submodules, LFS objects, hooks and `.git/config`** are not migrated (see table above).
 - `backup-then-replace` moves the existing directory to a sibling path (`<dest>.devmig-backup-<ts>`),
-  which must be inside the `ScopedFs` roots the engine approves; with the current engine roots the
-  provider fails that decision with `PATH_OUTSIDE_ALLOWED_ROOT` and a hint to choose `skip`.
+  which must be inside the `ScopedFs` roots the engine approves (`state.asidePaths` /
+  `backupAsidePathsFrom(state)`); when it is not, the provider fails that decision with
+  `PATH_OUTSIDE_ALLOWED_ROOT` and a hint to choose `skip` — nothing is written first.
 - A linked worktree on a branch that is also checked out in another restored worktree is skipped.
 - Working-tree state selected without the bundle cannot be applied (blocking preflight), except for
   repositories without commits.

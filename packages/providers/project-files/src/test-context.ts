@@ -79,6 +79,8 @@ export function restoreContext(
     roots: string[]
     tempDir: string
     collisionDecisions?: Record<string, CollisionPolicy>
+    /** Override the ScopedFs (tests inject failing implementations). */
+    fs?: ScopedFs
   },
 ): RestoreContext {
   const mapper = createPathMapper(opts.mappings, { homeDir: opts.homeDir })
@@ -87,7 +89,7 @@ export function restoreContext(
     payloadRoot: opts.payloadRoot,
     mappings: opts.mappings,
     mapPath: (p) => mapper.mapPath(p),
-    fs: new ScopedFs(opts.roots),
+    fs: opts.fs ?? new ScopedFs(opts.roots),
     collisionDecisions: opts.collisionDecisions ?? {},
     tempDir: opts.tempDir,
   }

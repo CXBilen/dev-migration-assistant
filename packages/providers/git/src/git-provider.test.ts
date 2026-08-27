@@ -6,7 +6,8 @@ import type { ManifestArtifact, ProjectDescriptor } from '@devmig/model'
 import { MigrationError, noopLogger, type Exec } from '@devmig/shared'
 import { createFakeExec, makeTempRoot, matchCommand, type TempRoot } from '@devmig/test-utils'
 import { createGitProvider, GitProvider } from './git-provider'
-import { GIT_SCHEMA_VERSION, type RepositoryJson } from './schema'
+import { backupAsidePathFor, backupAsidePathsFrom } from './plan'
+import { GIT_SCHEMA_VERSION, PlanState, type RepositoryJson } from './schema'
 
 const gitMissingExec: Exec = () => {
   throw new MigrationError('PATH_NOT_FOUND', 'Executable not found: git', {
@@ -26,6 +27,44 @@ function baseCtx(root: string, exec: Exec) {
     progress: () => {},
   }
 }
+
+describe('backup-then-replace aside paths', () => {
+  it('derives a timestamped sibling path', () => {
+    const aside = backupAsidePathFor(
+      '/Users/bob/Developer/demo',
+      new Date('2026-08-28T01:02:03.456Z'),
+    )
+    expect(aside).toBe('/Users/bob/Developer/demo.devmig-backup-2026-08-28T01-02-03-456Z')
+  })
+
+  it('backupAsidePathsFrom returns the aside paths of a plan state and [] for anything else', () => {
+    expect(backupAsidePathsFrom({})).toEqual([])
+    expect(backupAsidePathsFrom({ asidePaths: ['/x'] })).toEqual([])
+    const state: PlanState = {
+      destination: '/Users/bob/Developer/demo',
+      repositoryJson: '/payload/projects/p1/git/repository.json',
+      bundlePath: null,
+      restoreBundle: false,
+      emptyRepository: true,
+      primaryBranch: 'main',
+      head: null,
+      detached: false,
+      remotes: [],
+      upstreams: {},
+      worktrees: [],
+      ignored: [],
+      destinationCollisionId: 'destination',
+      backupAsidePath: '/Users/bob/Developer/demo.devmig-backup-1',
+      asidePaths: [
+        '/Users/bob/Developer/demo.devmig-backup-1',
+        '/Users/bob/Developer/demo-onboarding.devmig-backup-1',
+      ],
+    }
+    expect(backupAsidePathsFrom(PlanState.parse(state) as Record<string, unknown>)).toEqual(
+      state.asidePaths,
+    )
+  })
+})
 
 describe('GitProvider (scripted exec)', () => {
   let tmp: TempRoot
@@ -175,6 +214,7 @@ describe('GitProvider (scripted exec)', () => {
     expect(check?.detail).toContain('GIT_NOT_INSTALLED')
     expect(plan.collisions).toEqual([])
     expect(plan.steps.map((s) => s.id)).toEqual(['repository'])
+    expect(backupAsidePathsFrom(plan.state)).toEqual([])
   })
 
   it('planRestore rejects malformed branch names and shas from a tampered payload', async () => {

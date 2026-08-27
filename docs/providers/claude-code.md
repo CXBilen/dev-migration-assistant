@@ -157,6 +157,10 @@ The remap report lists `Claude sessions` (all sessions when the path changed), `
 Always add-only, never a collision: `file-history/<sid>`, `session-env/<sid>`, `history.jsonl` (rows deduplicated
 by `(sessionId, timestamp)`; the file is rewritten atomically).
 
+`<sid>.devmig-conflict.jsonl` files (and the transient `<sid>.devmig-incoming.jsonl`) are never treated as sessions
+by this provider's scanner, so a later backup of the destination does not carry them; resolve them by hand and
+delete the conflict file.
+
 Every file is written atomically (temp file in the destination directory + fsync + rename) and only through the
 `ScopedFs` whose roots are the approved destinations (project path, its worktrees, `claudeConfigDir`,
 `claudeJsonPath`). Large transcripts are streamed, never buffered.

@@ -82,6 +82,11 @@ describe('sessionIdFromFileName', () => {
     expect(sessionIdFromFileName('notes.md')).toBeNull()
     expect(sessionIdFromFileName('weird name.jsonl')).toBeNull()
   })
+
+  it("never treats the provider's own conflict/incoming files as sessions", () => {
+    expect(sessionIdFromFileName('abc-123.devmig-conflict.jsonl')).toBeNull()
+    expect(sessionIdFromFileName('abc-123.devmig-incoming.jsonl')).toBeNull()
+  })
 })
 
 describe('enumerateCandidates', () => {

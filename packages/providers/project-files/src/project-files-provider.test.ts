@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { PathMapping, ProjectDescriptor } from '@devmig/model'
-import { MigrationError, hashFile } from '@devmig/shared'
+import { MigrationError, ScopedFs, hashFile } from '@devmig/shared'
 import { createFakeExec, makeTempRoot, matchCommand, type TempRoot } from '@devmig/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -555,6 +555,13 @@ describe('ProjectFilesProvider', () => {
       expect(plan2.preflight).toEqual([
         expect.objectContaining({ id: 'destination:0', status: 'pass' }),
       ])
+      // Aside paths are decided at plan time (siblings inside the approved root) and exposed to the engine.
+      const plan2State = PlanState.parse(plan2.state)
+      expect(plan2State.asidePaths).toHaveLength(3)
+      for (const aside of plan2State.asidePaths) {
+        expect(path.dirname(aside)).toBe(newRoot)
+        expect(path.basename(aside)).toMatch(/^\.[^/]+\.devmig-backup-\d{8}T\d{6}Z$/)
+      }
 
       const nvmrcCollision = plan2.collisions.find((c) => c.path.endsWith('.nvmrc'))
       const result2 = await provider.restore(
@@ -575,6 +582,9 @@ describe('ProjectFilesProvider', () => {
       const backups = entries.filter((e) => e.startsWith('.nvmrc.devmig-backup-'))
       expect(backups).toHaveLength(1)
       expect(await fs.readFile(path.join(newRoot, backups[0]!), 'utf8')).toBe('20\n')
+      expect(path.join(newRoot, backups[0]!)).toBe(
+        plan2State.files.find((f) => f.relpath === '.nvmrc')?.asidePath,
+      )
       expect(result2.items.filter((i) => i.status === 'info')).toHaveLength(2)
       const verification2 = await provider.verify(
         { plan: plan2, result: result2, input },
@@ -590,9 +600,7 @@ describe('ProjectFilesProvider', () => {
       expect(await fs.readFile(path.join(sourceRoot, '.nvmrc'), 'utf8')).toBe('22\n')
     })
 
-    it('reports a missing destination root per file instead of throwing', async () => {
-      // ScopedFs currently rejects creating a root that does not exist yet (nearest existing ancestor is
-      // above the root). Until that is relaxed in @devmig/shared the provider reports the file as failed.
+    it('creates a missing destination root on demand', async () => {
       const sourceRoot = path.join(tmp.root, 'src-missing')
       await write(path.join(sourceRoot, '.nvmrc'), '22\n')
       const { project, output, payloadRoot } = await scanAndBackup(sourceRoot)
@@ -614,6 +622,9 @@ describe('ProjectFilesProvider', () => {
         input,
         planningContext({ homeDir: tmp.root, payloadRoot, mappings }),
       )
+      expect(plan.preflight).toEqual([
+        expect.objectContaining({ id: 'destination:0', status: 'warn', blocking: false }),
+      ])
       const tempDir = path.join(tmp.root, 'rt-missing')
       await fs.mkdir(tempDir)
       const result = await provider.restore(
@@ -621,15 +632,131 @@ describe('ProjectFilesProvider', () => {
         input,
         restoreContext({ homeDir: tmp.root, payloadRoot, mappings, roots: [newRoot], tempDir }),
       )
-      if (result.status === 'ok') {
-        // ScopedFs learned to create missing roots: the file must be there.
-        expect(await fs.readFile(path.join(newRoot, '.nvmrc'), 'utf8')).toBe('22\n')
-      } else {
-        expect(result.status).toBe('failed')
-        expect(result.items[0]?.status).toBe('error')
-        expect(result.items[0]?.detail).toContain('does not exist')
-        expect(await fs.stat(newRoot).catch(() => null)).toBeNull()
+      expect(result.status).toBe('ok')
+      expect((await fs.stat(newRoot)).isDirectory()).toBe(true)
+      expect(await fs.readFile(path.join(newRoot, '.nvmrc'), 'utf8')).toBe('22\n')
+      // Nothing else appeared next to the new root.
+      expect(await fs.readdir(path.join(tmp.root, 'missing'))).toEqual(['dest-proj'])
+    })
+
+    it('isolates a per-file failure and keeps restoring the other files', async () => {
+      if (process.getuid?.() === 0) return // root ignores permission bits
+      const sourceRoot = path.join(tmp.root, 'src-partial')
+      await write(path.join(sourceRoot, '.nvmrc'), '22\n')
+      await write(path.join(sourceRoot, 'certs', 'dev.crt'), 'new cert\n')
+      const { project, output, payloadRoot } = await scanAndBackup(sourceRoot)
+      const newRoot = path.join(tmp.root, 'dest-partial')
+      await write(path.join(newRoot, 'certs', 'dev.crt'), 'old cert\n')
+      const mappings: PathMapping[] = [
+        { projectId: project.id, oldPath: sourceRoot, newPath: newRoot },
+      ]
+      const input = {
+        project: { id: project.id, name: project.name, oldPath: sourceRoot, newPath: newRoot },
+        section: {
+          providerId: PROJECT_FILES_PROVIDER_ID,
+          schemaVersion: 1,
+          artifacts: output.artifacts,
+          summary: {},
+        },
+        artifacts: output.artifacts,
       }
+      const plan = await provider.planRestore(
+        input,
+        planningContext({ homeDir: tmp.root, payloadRoot, mappings }),
+      )
+      const collision = plan.collisions.find((c) => c.path.endsWith('dev.crt'))
+      expect(collision).toBeDefined()
+      const tempDir = path.join(tmp.root, 'rt-partial')
+      await fs.mkdir(tempDir)
+      const certsDir = path.join(newRoot, 'certs')
+      await fs.chmod(certsDir, 0o500)
+      try {
+        const result = await provider.restore(
+          plan,
+          input,
+          restoreContext({
+            homeDir: tmp.root,
+            payloadRoot,
+            mappings,
+            roots: [newRoot],
+            tempDir,
+            collisionDecisions: { [collision!.id]: 'backup-then-replace' },
+          }),
+        )
+        expect(result.status).toBe('partial')
+        expect(result.items.map((i) => [i.label, i.status])).toEqual([
+          ['.nvmrc', 'ok'],
+          ['certs/dev.crt', 'error'],
+        ])
+        expect(result.warnings).toHaveLength(1)
+        expect(await fs.readFile(path.join(newRoot, '.nvmrc'), 'utf8')).toBe('22\n')
+        expect(await fs.readFile(path.join(certsDir, 'dev.crt'), 'utf8')).toBe('old cert\n')
+        const verification = await provider.verify(
+          { plan, result, input },
+          verifyContext({ homeDir: tmp.root, payloadRoot, mappings }),
+        )
+        expect(verification.checks.map((c) => [c.id, c.status])).toEqual([
+          ['verify:.nvmrc', 'pass'],
+          ['failed:certs/dev.crt', 'fail'],
+        ])
+      } finally {
+        await fs.chmod(certsDir, 0o700)
+      }
+    })
+
+    it('puts the previous file back when a replace fails after it was moved aside', async () => {
+      const sourceRoot = path.join(tmp.root, 'src-rollback')
+      await write(path.join(sourceRoot, '.nvmrc'), '22\n')
+      const { project, output, payloadRoot } = await scanAndBackup(sourceRoot)
+      const newRoot = path.join(tmp.root, 'dest-rollback')
+      await write(path.join(newRoot, '.nvmrc'), '20\n')
+      const mappings: PathMapping[] = [
+        { projectId: project.id, oldPath: sourceRoot, newPath: newRoot },
+      ]
+      const input = {
+        project: { id: project.id, name: project.name, oldPath: sourceRoot, newPath: newRoot },
+        section: {
+          providerId: PROJECT_FILES_PROVIDER_ID,
+          schemaVersion: 1,
+          artifacts: output.artifacts,
+          summary: {},
+        },
+        artifacts: output.artifacts,
+      }
+      const plan = await provider.planRestore(
+        input,
+        planningContext({ homeDir: tmp.root, payloadRoot, mappings }),
+      )
+      const collision = plan.collisions[0]
+      expect(collision?.path).toBe(path.join(newRoot, '.nvmrc'))
+      class FailingWriteFs extends ScopedFs {
+        override copyFileAtomic(): Promise<void> {
+          return Promise.reject(
+            Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' }),
+          )
+        }
+      }
+      const tempDir = path.join(tmp.root, 'rt-rollback')
+      await fs.mkdir(tempDir)
+      const result = await provider.restore(
+        plan,
+        input,
+        restoreContext({
+          homeDir: tmp.root,
+          payloadRoot,
+          mappings,
+          roots: [newRoot],
+          tempDir,
+          fs: new FailingWriteFs([newRoot]),
+          collisionDecisions: { [collision!.id]: 'backup-then-replace' },
+        }),
+      )
+      expect(result.status).toBe('failed')
+      expect(result.items[0]).toMatchObject({ label: '.nvmrc', status: 'error' })
+      expect(result.items[0]?.detail).toContain('ENOSPC')
+      expect(result.items[0]?.detail).toContain('put back')
+      expect(await fs.readFile(path.join(newRoot, '.nvmrc'), 'utf8')).toBe('20\n')
+      expect(await fs.readdir(newRoot)).toEqual(['.nvmrc'])
     })
 
     it('refuses to write outside the approved roots and fails closed on tampered payloads', async () => {

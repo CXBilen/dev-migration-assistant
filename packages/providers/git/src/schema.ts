@@ -202,6 +202,11 @@ export const PlanState = z.object({
   ignored: z.array(PlanIgnored),
   destinationCollisionId: NullableString,
   backupAsidePath: z.string(),
+  /**
+   * Every sibling path the provider may create under `backup-then-replace` (the destination and any
+   * colliding worktree path moved aside). The engine adds these to the ScopedFs roots it approves.
+   */
+  asidePaths: z.array(z.string()).default([]),
 })
 export type PlanState = z.infer<typeof PlanState>
 

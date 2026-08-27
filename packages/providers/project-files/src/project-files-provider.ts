@@ -48,6 +48,7 @@ import {
   MigrationError,
   displayPath,
   hashFile,
+  isAbortError,
   isMigrationError,
   safeJoin,
   stableId,
@@ -118,6 +119,25 @@ function formatTimestamp(date: Date): string {
     .toISOString()
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}Z$/, 'Z')
+}
+
+/** `<path>.devmig-backup-<timestamp>` — a sibling of the file, so it stays inside the approved root. */
+function asidePathFor(destination: string, stamp: string): string {
+  return `${destination}.devmig-backup-${stamp}`
+}
+
+/** The planned aside path, or the first free `-2`, `-3`… variant next to it when something took it meanwhile. */
+async function availableAsidePath(candidate: string): Promise<string> {
+  if ((await lstatOrNull(candidate)) === null) return candidate
+  for (let n = 2; n < 1000; n += 1) {
+    const alternative = `${candidate}-${n}`
+    if ((await lstatOrNull(alternative)) === null) return alternative
+  }
+  throw new MigrationError(
+    'RESTORE_DESTINATION_EXISTS',
+    `Could not find a free backup name next to ${candidate}.`,
+    { details: { candidate } },
+  )
 }
 
 function restoreMode(sensitivity: Sensitivity, original: number): number {
@@ -492,7 +512,9 @@ export class ProjectFilesProvider implements MigrationProvider {
     const warnings: string[] = []
     const unsupportedReferences: { location: string; reason: string }[] = []
     const files: PlannedFile[] = []
+    const asidePaths: string[] = []
     const roots = new Map<string, { index: number; oldRoot: string; newRoot: string }>()
+    const planStamp = formatTimestamp(new Date())
     let relocated = 0
 
     for (const artifact of input.artifacts) {
@@ -546,9 +568,12 @@ export class ProjectFilesProvider implements MigrationProvider {
       }
 
       let collisionId: string | undefined
+      let asidePath: string | undefined
       const existing = await lstatOrNull(destination)
       if (existing) {
         collisionId = `collision:${meta.worktreeIndex}/${meta.relpath}`
+        asidePath = asidePathFor(destination, planStamp)
+        asidePaths.push(asidePath)
         collisions.push({
           id: collisionId,
           providerId: this.id,
@@ -584,6 +609,7 @@ export class ProjectFilesProvider implements MigrationProvider {
         destination,
         pathChanged: mapped.changed,
         ...(collisionId ? { collisionId } : {}),
+        ...(asidePath ? { asidePath } : {}),
         sha256: meta.sha256,
         sizeBytes: artifact.sizeBytes,
         mode: meta.mode,
@@ -642,7 +668,7 @@ export class ProjectFilesProvider implements MigrationProvider {
         unsupportedReferences,
       },
       warnings,
-      state: { files } satisfies PlanState,
+      state: { files, asidePaths } satisfies PlanState,
     }
   }
 
@@ -660,6 +686,35 @@ export class ProjectFilesProvider implements MigrationProvider {
     const policyById = new Map(plan.collisions.map((c) => [c.id, c.policy]))
     const total = state.files.length
 
+    // Fail closed before touching anything: every destination must sit inside an approved root.
+    for (const file of state.files) {
+      if (!ctx.fs.isAllowed(file.destination)) {
+        throw new MigrationError(
+          'PATH_OUTSIDE_ALLOWED_ROOT',
+          `Refusing to restore ${file.relpath}: ${file.destination} is outside the approved destinations.`,
+          {
+            details: { relpath: file.relpath, destination: file.destination, roots: ctx.fs.roots },
+          },
+        )
+      }
+    }
+
+    const fail = (file: PlannedFile, reason: string): void => {
+      failed.push({
+        artifactId: file.artifactId,
+        relpath: file.relpath,
+        destination: file.destination,
+        reason,
+      })
+      items.push({ label: file.relpath, status: 'error', detail: reason })
+      warnings.push(`${file.relpath}: ${reason}`)
+      ctx.progress(`${file.relpath} failed`, undefined, {
+        id: file.artifactId,
+        label: file.relpath,
+        status: 'failed',
+      })
+    }
+
     for (const [i, file] of state.files.entries()) {
       throwIfAborted(ctx.signal)
       ctx.progress(`Restoring ${file.relpath}`, total > 0 ? i / total : undefined, {
@@ -667,109 +722,109 @@ export class ProjectFilesProvider implements MigrationProvider {
         label: file.relpath,
         status: 'running',
       })
-      const source = safeJoin(ctx.payloadRoot, file.payloadPath)
-      const integrity = await hashFile(source, ctx.signal)
-      if (integrity.sha256 !== file.sha256) {
-        const reason = 'Payload checksum mismatch; the file was not restored.'
-        failed.push({
-          artifactId: file.artifactId,
-          relpath: file.relpath,
-          destination: file.destination,
-          reason,
-        })
-        items.push({ label: file.relpath, status: 'error', detail: reason })
-        warnings.push(`${file.relpath}: ${reason}`)
-        continue
-      }
+      let movedAside: string | undefined
+      try {
+        const source = safeJoin(ctx.payloadRoot, file.payloadPath)
+        const integrity = await hashFile(source, ctx.signal)
+        if (integrity.sha256 !== file.sha256) {
+          fail(file, 'Payload checksum mismatch; the file was not restored.')
+          continue
+        }
 
-      // The Git restore normally creates the project/worktree folder first; create it on demand otherwise.
-      const rootStat = await lstatOrNull(file.destinationRoot)
-      if (!rootStat) {
-        try {
+        // The Git restore normally creates the project/worktree folder first; create it on demand otherwise.
+        const rootStat = await lstatOrNull(file.destinationRoot)
+        if (!rootStat) {
           await ctx.fs.mkdir(file.destinationRoot, 0o755)
-        } catch (err) {
-          if (isMigrationError(err) && err.code === 'CANCELLED') throw err
-          const reason = `Destination folder ${file.destinationRoot} does not exist and could not be created: ${err instanceof Error ? err.message : String(err)}`
-          failed.push({
-            artifactId: file.artifactId,
-            relpath: file.relpath,
-            destination: file.destination,
-            reason,
-          })
-          items.push({ label: file.relpath, status: 'error', detail: reason })
-          warnings.push(`${file.relpath}: ${reason}`)
+        } else if (!rootStat.isDirectory()) {
+          fail(file, `Destination ${file.destinationRoot} exists but is not a folder.`)
           continue
         }
-      } else if (!rootStat.isDirectory()) {
-        const reason = `Destination ${file.destinationRoot} exists but is not a folder.`
-        failed.push({
+
+        if (await ctx.fs.exists(file.destination)) {
+          const policy: CollisionPolicy =
+            (file.collisionId ? ctx.collisionDecisions[file.collisionId] : undefined) ??
+            (file.collisionId ? policyById.get(file.collisionId) : undefined) ??
+            'skip'
+          if (policy === 'skip') {
+            const reason = 'A file already exists at the destination; kept as is.'
+            skipped.push({
+              artifactId: file.artifactId,
+              relpath: file.relpath,
+              destination: file.destination,
+              reason,
+            })
+            items.push({ label: file.relpath, status: 'info', detail: `Skipped — ${reason}` })
+            ctx.progress(`Skipped ${file.relpath}`, undefined, {
+              id: file.artifactId,
+              label: file.relpath,
+              status: 'skipped',
+            })
+            continue
+          }
+          if (policy !== 'backup-then-replace') {
+            throw new MigrationError(
+              'INVALID_INPUT',
+              `Collision policy "${policy}" is not supported for ${file.relpath}.`,
+              { details: { relpath: file.relpath, policy } },
+            )
+          }
+          const aside = await availableAsidePath(
+            file.asidePath ?? asidePathFor(file.destination, formatTimestamp(new Date())),
+          )
+          await ctx.fs.rename(file.destination, aside)
+          movedAside = aside
+        }
+
+        const mode = restoreMode(file.sensitivity, file.mode)
+        // Streamed temp file in the destination folder + flush + rename; never loads the file into memory.
+        await ctx.fs.copyFileAtomic(source, file.destination, mode)
+        written.push({
           artifactId: file.artifactId,
           relpath: file.relpath,
           destination: file.destination,
-          reason,
+          sha256: file.sha256,
+          mode,
+          sensitivity: file.sensitivity,
+          ...(movedAside ? { backupPath: movedAside } : {}),
         })
-        items.push({ label: file.relpath, status: 'error', detail: reason })
-        warnings.push(`${file.relpath}: ${reason}`)
-        continue
-      }
-
-      let backupPath: string | undefined
-      if (await ctx.fs.exists(file.destination)) {
-        const policy: CollisionPolicy =
-          (file.collisionId ? ctx.collisionDecisions[file.collisionId] : undefined) ??
-          (file.collisionId ? policyById.get(file.collisionId) : undefined) ??
-          'skip'
-        if (policy === 'skip') {
-          const reason = 'A file already exists at the destination; kept as is.'
-          skipped.push({
-            artifactId: file.artifactId,
-            relpath: file.relpath,
-            destination: file.destination,
-            reason,
-          })
-          items.push({ label: file.relpath, status: 'info', detail: `Skipped — ${reason}` })
-          ctx.progress(`Skipped ${file.relpath}`, undefined, {
-            id: file.artifactId,
-            label: file.relpath,
-            status: 'skipped',
-          })
-          continue
+        items.push({
+          label: file.relpath,
+          status: 'ok',
+          detail: movedAside
+            ? `Restored; previous file kept at ${path.basename(movedAside)}`
+            : `Restored to ${file.destination}`,
+        })
+        ctx.progress(`Restored ${file.relpath}`, total > 0 ? (i + 1) / total : undefined, {
+          id: file.artifactId,
+          label: file.relpath,
+          status: 'done',
+        })
+      } catch (err) {
+        if (isAbortError(err) || (isMigrationError(err) && err.code === 'CANCELLED')) throw err
+        const message = err instanceof Error ? err.message : String(err)
+        let restoredOriginal = false
+        if (movedAside !== undefined && !(await ctx.fs.exists(file.destination))) {
+          // A replace that failed after the original was moved aside must never lose the user's file.
+          restoredOriginal = await ctx.fs
+            .rename(movedAside, file.destination)
+            .then(() => true)
+            .catch(() => false)
         }
-        if (policy !== 'backup-then-replace') {
-          throw new MigrationError(
-            'INVALID_INPUT',
-            `Collision policy "${policy}" is not supported for ${file.relpath}.`,
-            { details: { relpath: file.relpath, policy } },
-          )
-        }
-        backupPath = `${file.destination}.devmig-backup-${formatTimestamp(new Date())}`
-        await ctx.fs.rename(file.destination, backupPath)
+        ctx.logger.warn('Project file restore failed', {
+          relpath: file.relpath,
+          destination: file.destination,
+          error: message,
+          restoredOriginal,
+        })
+        fail(
+          file,
+          restoredOriginal
+            ? `${message} — the previous file was put back.`
+            : movedAside !== undefined
+              ? `${message} — the previous file is at ${movedAside}.`
+              : message,
+        )
       }
-
-      const data = await ctx.fs.readFile(source)
-      const mode = restoreMode(file.sensitivity, file.mode)
-      await ctx.fs.writeFileAtomic(file.destination, data, mode)
-      written.push({
-        artifactId: file.artifactId,
-        relpath: file.relpath,
-        destination: file.destination,
-        sha256: file.sha256,
-        mode,
-        sensitivity: file.sensitivity,
-        ...(backupPath ? { backupPath } : {}),
-      })
-      items.push({
-        label: file.relpath,
-        status: 'ok',
-        detail: backupPath
-          ? `Restored; previous file kept at ${path.basename(backupPath)}`
-          : `Restored to ${file.destination}`,
-      })
-      ctx.progress(`Restored ${file.relpath}`, total > 0 ? (i + 1) / total : undefined, {
-        id: file.artifactId,
-        label: file.relpath,
-        status: 'done',
-      })
     }
 
     const attention: AttentionItem[] = []

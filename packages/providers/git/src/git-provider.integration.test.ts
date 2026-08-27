@@ -50,6 +50,7 @@ import {
 } from '@devmig/test-utils'
 import { createGitProvider } from './git-provider'
 import { createGitClient, inspectRepository } from './git'
+import { backupAsidePathsFrom } from './plan'
 import { PlanState, RestoreState } from './schema'
 
 const SECRET_TOKEN_LINE = 'API_KEY=sk-test-untracked-abcdef1234567890'
@@ -318,9 +319,8 @@ describe('GitProvider round trip (real git)', () => {
       { projectId: project.id, oldPath: fixture.path, newPath: destination },
       { projectId: project.id, oldPath: fixture.worktree!.path, newPath: destinationWorktree },
     ]
-    // The engine creates the destination itself; ScopedFs currently cannot create its own root
-    // directory (reported as an interface change request), so the empty destination is prepared here.
-    await fs.mkdir(destination, { recursive: true })
+    // The destination does not exist on Mac B: the provider creates it (ScopedFs allows creating a
+    // not-yet-existing root). Tests that need a pre-existing destination create it themselves.
   })
 
   afterEach(async () => {
@@ -426,7 +426,13 @@ describe('GitProvider round trip (real git)', () => {
     )
     expect(planned.newPath).toBe(destination)
     expect(planned.plan.preflight.filter((c) => c.status === 'fail')).toEqual([])
+    expect(planned.plan.preflight.find((c) => c.id === 'destination')).toMatchObject({
+      status: 'pass',
+      label: 'Destination does not exist yet (will be created)',
+      detail: destination,
+    })
     expect(planned.plan.collisions).toEqual([])
+    expect(backupAsidePathsFrom(planned.plan.state)).toEqual([])
     expect(planned.plan.steps.map((s) => s.id)).toEqual([
       'repository',
       'worktrees',
@@ -587,6 +593,7 @@ describe('GitProvider round trip (real git)', () => {
     const scanned = await scan(h, project, exec, env)
     const selected = defaultSelection(scanned)
     const backed = await backup(h, project, scanned, selected, exec, env)
+    await fs.mkdir(destination, { recursive: true })
     await fs.writeFile(path.join(destination, 'keep.txt'), 'existing content\n')
 
     const planned = await plan(
@@ -647,6 +654,11 @@ describe('GitProvider round trip (real git)', () => {
     // backup-then-replace: the existing directory is moved aside (when the aside path is approved)
     const asidePath = PlanState.parse(rePlanned.plan.state).backupAsidePath
     expect(asidePath.startsWith(`${destination}.devmig-backup-`)).toBe(true)
+    // The engine reads the aside paths from the plan state to extend the approved roots.
+    expect(backupAsidePathsFrom(rePlanned.plan.state)).toEqual([asidePath])
+    expect(backupAsidePathsFrom(planned.plan.state)).toEqual([
+      PlanState.parse(planned.plan.state).backupAsidePath,
+    ])
     const replaced = await restore(
       h,
       rePlanned,
@@ -661,6 +673,80 @@ describe('GitProvider round trip (real git)', () => {
     expect(await exists(path.join(destination, 'keep.txt'))).toBe(false)
     const verification = await verify(h, rePlanned, replaced.result, replaced.verifyCtx)
     expect(verification.checks.filter((c) => c.status !== 'pass')).toEqual([])
+  })
+
+  it('restores the whole repository when the selected project is a linked worktree', async () => {
+    const worktreeProject = await describeProject(fixture.worktree!.path, exec, env)
+    expect(worktreeProject.git?.isLinkedWorktree).toBe(true)
+    const scanned = await scan(h, worktreeProject, exec, env)
+    const selected = defaultSelection(scanned)
+    // Index 0 is always the primary worktree, even though the user selected the linked one.
+    expect(selected).toEqual([
+      `git:${worktreeProject.id}:bundle`,
+      `git:${worktreeProject.id}:worktree:0:state`,
+      `git:${worktreeProject.id}:worktree:1:state`,
+    ])
+    expect(scanned.artifacts.find((a) => a.meta.kind === 'worktree-state')?.meta).toMatchObject({
+      worktreeIndex: 0,
+      path: fixture.path,
+      isPrimary: true,
+    })
+    const backed = await backup(h, worktreeProject, scanned, selected, exec, env)
+    // Core maps the selected directory and derives the sibling mapping for the primary worktree.
+    const worktreeMappings: PathMapping[] = [
+      {
+        projectId: worktreeProject.id,
+        oldPath: fixture.worktree!.path,
+        newPath: destinationWorktree,
+      },
+      { projectId: worktreeProject.id, oldPath: fixture.path, newPath: destination },
+    ]
+    const planned = await plan(
+      h,
+      backed.payloadRoot,
+      worktreeProject,
+      backed.artifacts,
+      selected,
+      worktreeMappings,
+      exec,
+      env,
+    )
+    expect(planned.newPath).toBe(destinationWorktree)
+    expect(planned.plan.preflight.filter((c) => c.status === 'fail')).toEqual([])
+    expect(planned.plan.collisions).toEqual([])
+    expect(planned.plan.warnings.some((w) => w.includes('linked worktree'))).toBe(true)
+    const state = PlanState.parse(planned.plan.state)
+    expect(state.destination).toBe(destination)
+    expect(state.worktrees.map((w) => [w.isPrimary, w.newPath, w.branch])).toEqual([
+      [true, destination, 'main'],
+      [false, destinationWorktree, fixture.featureBranch],
+    ])
+    expect(planned.plan.steps[0]).toMatchObject({ id: 'repository', destination })
+
+    const { result, verifyCtx } = await restore(
+      h,
+      planned,
+      backed.payloadRoot,
+      [destinationWorktree, destination],
+      exec,
+      env,
+    )
+    expect(result.status).toBe('ok')
+    expect(result.items.filter((i) => i.status === 'error')).toEqual([])
+    const verification = await verify(h, planned, result, verifyCtx)
+    expect(verification.checks.filter((c) => c.status !== 'pass')).toEqual([])
+    const before = await captureGitState(fixture.path, exec, { env })
+    const restoredPrimary = await captureGitState(destination, exec, { env })
+    expect(compareGitState(before, restoredPrimary, { ignorePaths: ['notes/token.txt'] })).toEqual({
+      equal: true,
+      differences: [],
+    })
+    const restoredWorktree = await captureGitState(destinationWorktree, exec, { env })
+    expect(compareGitState(fixture.worktree!.expected, restoredWorktree)).toEqual({
+      equal: true,
+      differences: [],
+    })
+    expect(await exists(sourceHookMarker)).toBe(false)
   })
 
   it('never runs repository hooks during restore', async () => {

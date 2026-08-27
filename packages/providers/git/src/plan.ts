@@ -17,7 +17,13 @@ import type {
   PreflightCheck,
   RestoreStep,
 } from '@devmig/model'
-import { MigrationError, isSafeArchivePath, pathExists, safeJoin } from '@devmig/shared'
+import {
+  MigrationError,
+  canonicalizePath,
+  isSafeArchivePath,
+  pathExists,
+  safeJoin,
+} from '@devmig/shared'
 import { parseSelection, plural, shortSha } from './common'
 import {
   GIT_MIN_SUPPORTED,
@@ -33,13 +39,13 @@ import {
 } from './git'
 import {
   GIT_PROVIDER_ID,
+  PlanState,
   REPOSITORY_JSON,
   RepositoryJson,
   STATE_JSON,
   WORKTREES_DIR,
   WorktreeStateJson,
   type PlanIgnored,
-  type PlanState,
   type PlanWorktree,
   type RemoteRecord,
 } from './schema'
@@ -135,6 +141,16 @@ export function backupAsidePathFor(destination: string, now = new Date()): strin
   return `${destination}.devmig-backup-${stamp}`
 }
 
+/**
+ * Sibling paths a restore of this plan may create under `backup-then-replace`
+ * (`<path>.devmig-backup-<timestamp>`). The engine adds them to the ScopedFs roots it approves;
+ * unparsable state yields an empty list.
+ */
+export function backupAsidePathsFrom(state: Record<string, unknown>): string[] {
+  const parsed = PlanState.safeParse(state)
+  return parsed.success ? [...parsed.data.asidePaths] : []
+}
+
 export async function planGitRestore(
   input: ProviderRestoreInput,
   ctx: RestorePlanningContext,
@@ -168,7 +184,7 @@ export async function planGitRestore(
   }
   const selection = parseSelection(input.artifacts)
   warnings.push(...selection.warnings)
-  const destination = input.project.newPath
+  const projectDest = input.project.newPath
 
   // ---- payload ----
   const repositoryJsonRel = locateRepositoryJson(input.artifacts, selection.repositoryJson)
@@ -191,6 +207,28 @@ export async function planGitRestore(
   }
   const providerDir = path.dirname(repositoryJsonAbs)
   const emptyRepository = repository.head === null
+
+  // ---- primary destination ----
+  // The selected directory may itself be a linked worktree. The repository (primary worktree) is then
+  // restored at the mapped location of the primary and the selected worktree at the project destination.
+  const primaryRecord = repository.worktrees.find((w) => w.isPrimary)
+  const primaryOld = primaryRecord?.path ?? repository.primaryPath
+  const selectedOld = canonicalizePath(input.project.oldPath)
+  const selectedIsLinked = repository.worktrees.some(
+    (w) => !w.isPrimary && canonicalizePath(w.path) === selectedOld,
+  )
+  let destination = projectDest
+  if (selectedIsLinked && canonicalizePath(primaryOld) !== selectedOld) {
+    const mapped = ctx.mapPath(primaryOld)
+    destination = path.resolve(
+      mapped.mapped
+        ? mapped.newPath
+        : path.join(path.dirname(projectDest), path.basename(primaryOld)),
+    )
+    warnings.push(
+      `The selected directory is a linked worktree; the repository (primary worktree ${primaryOld}) is restored at ${destination}.`,
+    )
+  }
 
   // ---- git ----
   const availability = await checkGitAvailable(ctx.exec, ctx.env, ctx.signal)
@@ -351,7 +389,6 @@ export async function planGitRestore(
   }
 
   // ---- worktrees ----
-  const primaryRecord = repository.worktrees.find((w) => w.isPrimary)
   const worktrees: PlanWorktree[] = []
   const usedBranches = new Set<string>()
   if (repository.branch) usedBranches.add(repository.branch)
@@ -552,6 +589,11 @@ export async function planGitRestore(
     })
   }
 
+  const backupAsidePath = backupAsidePathFor(destination)
+  const asidePaths = [
+    ...(destinationCollisionId ? [backupAsidePath] : []),
+    ...worktrees.flatMap((w) => (w.collisionId && w.backupAsidePath ? [w.backupAsidePath] : [])),
+  ]
   const state: PlanState = {
     destination,
     repositoryJson: repositoryJsonAbs,
@@ -566,7 +608,8 @@ export async function planGitRestore(
     worktrees,
     ignored,
     destinationCollisionId,
-    backupAsidePath: backupAsidePathFor(destination),
+    backupAsidePath,
+    asidePaths,
   }
   const plan = base(state)
   plan.remap = {

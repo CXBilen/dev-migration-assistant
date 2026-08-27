@@ -143,7 +143,7 @@ version are independent — see [`docs/release/RELEASE.md`](../release/RELEASE.m
 
 ## 5. Registering the provider
 
-Providers are registered explicitly in the Electron main process (registration order = execution order):
+Providers are registered explicitly in the Electron main process. Registration order is the scan/backup order:
 
 ```ts
 // apps/desktop/src/main/providers.ts (or wherever the registry is assembled)
@@ -157,21 +157,30 @@ import { createCodexProvider } from '@devmig/provider-codex'
 export function createRegistry(): ProviderRegistry {
   return new ProviderRegistry()
     .register(createGitProvider()) // repositories first: worktrees must exist before session dirs
+    .register(createProjectFilesProvider())
     .register(createClaudeCodeProvider())
     .register(createCodexProvider())
-    .register(createProjectFilesProvider())
     .register(createRuntimeProvider())
 }
 ```
 
-The restore engine runs providers in a fixed order (`RESTORE_REPOSITORIES → RESTORE_WORKTREE_STATE → RESTORE_CLAUDE
-→ RESTORE_PROJECT_FILES`); a new AI-tool provider slots in alongside Claude Code.
+On restore the engine does not rely on registration order: the built-in providers run in the fixed order
+`git → project-files → claude-code → runtime` (`RESTORE_PROVIDER_ORDER` in
+`packages/core/src/restore/provider-order.ts`, phases `RESTORE_REPOSITORIES → RESTORE_PROJECT_FILES →
+RESTORE_CLAUDE → RESTORE_RUNTIME`), and every other provider runs afterwards in registry order under a phase named
+`RESTORE_<ID>` (`RESTORE_CODEX` for the example). Add your id to `RESTORE_PROVIDER_ORDER` only if it must run
+before one of the built-ins.
 
 ## 6. Tests with `@devmig/test-utils`
 
-`@devmig/test-utils` provides fixture builders: temporary homes, fake Claude config dirs with sessions, temp git
-repositories with worktrees and staged/unstaged/untracked/binary changes. Use them; never touch the real home
-directory. Minimum test set for a provider:
+`@devmig/test-utils` (`packages/test-utils/src/index.ts`) provides fixture builders — `makeTempRoot` /
+`withTempRoot` (private temp roots that refuse to point at the real home), `createFakeHome` (a
+`<root>/Users/<user>` home with `.claude` and `Documents/GitHub`), `createGitRepoFixture` (commits, a feature
+branch, a remote, staged/unstaged/untracked/binary changes and a sibling worktree), `createClaudeFixture` (a
+realistic `~/.claude` with transcripts, memory, `history.jsonl` and `~/.claude.json`), `createSourceMachineFixture`
+/ `createDestinationMachineFixture` ("Mac A" and "Mac B"), `createFakeExec` (scripted `Exec`), `captureGitState` /
+`compareGitState` and JSONL helpers. Use them; never touch the real home directory. Minimum test set for a
+provider:
 
 - **Unit:** parsers reject malformed input (zod), remap rewrites exactly the documented fields and nothing else,
   classification marks secrets `sensitive`/`credential`, argument validation rejects `-`-prefixed strings.
@@ -242,6 +251,7 @@ import type {
   RestoreContext,
   RestorePlanningContext,
   ScanContext,
+  VerifyContext,
 } from '@devmig/core'
 import type {
   ManifestArtifact,

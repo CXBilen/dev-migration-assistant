@@ -64,15 +64,25 @@ worktree root, mode, sha256, category, classification, `indexPath`).
   (`ARCHIVE_ENTRY_REJECTED`).
 - **Collisions:** an existing destination file is a `file-exists` collision with
   `allowedPolicies: ['skip', 'backup-then-replace']`, default `skip`. `backup-then-replace` moves the existing
-  file to `<path>.devmig-backup-<timestamp>` before writing. No merge semantics.
+  file to `<path>.devmig-backup-<timestamp>` before writing (a `-2`, `-3`… suffix is appended if that name is
+  taken). The aside path is decided at plan time and carried in `state.files[].asidePath`; every planned aside
+  path is also listed in `state.asidePaths` so the restore engine can add them to its `ScopedFs` roots (they are
+  siblings of the file, hence already inside the project root). No merge semantics.
 - **Preflight (non-blocking):** `destination:<worktreeIndex>` — `pass` when the folder exists and is
   writable, `warn` when it does not exist yet (the Git restore creates it; otherwise it is created on
   demand), `fail`/blocking when it exists but is not a folder or is not writable.
 - **Remap report:** `affected` counts relocated files; `safeRewriteCount` is always 0 because **file
   contents are never rewritten** (ADR-0005). Files whose contents mention the old worktree path are listed
   under `unsupportedReferences` so the user can review them.
-- **Writes:** payload checksum is verified before writing; files are written atomically through `ScopedFs`
-  (`writeFileAtomic`) with the original mode for safe files and **0600 for anything sensitive**.
+- **Writes:** before anything is written every destination is checked against the approved roots (the provider
+  throws `PATH_OUTSIDE_ALLOWED_ROOT` and writes nothing otherwise). Per file: the payload checksum is verified,
+  the project/worktree folder is created on demand when the Git restore did not create it, then the file is
+  streamed atomically through `ScopedFs.copyFileAtomic` (temp file in the destination folder + flush + rename)
+  with the original mode for safe files and **0600 for anything sensitive**.
+- **Failure isolation:** a file that cannot be written (permissions, disk full, a symlink at the destination
+  that escapes the root…) is reported as an `error` item and does not stop the remaining files; the outcome is
+  `partial`/`failed`. When a `backup-then-replace` write fails after the original was moved aside, the original
+  is moved back and the report says so. Cancellation aborts immediately.
 - **Attention:** an informational `manual` item lists restored files that may contain secrets.
 
 ## Verify
@@ -86,7 +96,6 @@ files are reported as `warn` with the reason; failed files as `fail`.
 - `.vscode/`, `.idea/` and other editor state are not captured in v0.1.
 - Only ignored files are captured in Git repositories; if the Git provider is not part of a restore, its
   tracked/untracked files are not recreated by this provider.
-- `ScopedFs` currently refuses to create a destination root that does not exist yet (its nearest existing
-  ancestor is above the root). The provider reports such files as failed with a clear message instead of
-  throwing; in the normal flow the Git provider has created the folder already.
+- File contents are never rewritten, so an `.env` that hard-codes the old project path keeps it (reported under
+  `unsupportedReferences`).
 - Certificates under `certs/` deeper than two levels are ignored.

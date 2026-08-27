@@ -7,7 +7,9 @@ though the new machine has a different username and you want the projects in a d
 
 > Written against the v0.1 design. Screen names may differ slightly until the UI is final; the phases and the
 > safety guarantees will not. Anything described as "the app checks" or "the app refuses" is enforced in the
-> core engines, not just in the UI.
+> core engines, not just in the UI. Alpha builds that ship before the Electron bridge to the engines lands run
+> the UI on built-in preview data and show a **Preview data** badge — nothing on the machine is read or written
+> by such a build, so this procedure needs a build without the badge (see `CHANGELOG.md`).
 
 **Time needed:** 10–30 minutes of your attention plus copy time. **Network needed:** none for the migration
 itself; only for re-authenticating on the new Mac.
@@ -70,8 +72,9 @@ and the safest fallback is a machine you have not wiped yet.
    re-reads the finished file and checks every encrypted chunk and every file checksum. Wait for `COMPLETE`;
    the summary shows the file size, project count, session count and worktree count.
 
-Optional, recommended if the file is going onto a drive you will hand to someone else: **Restore → Open backup
-→ Verify** streams through the file once more without extracting anything.
+Optional, recommended if the file is going onto a drive you will hand to someone else: **Diagnostics → Verify a
+backup file** streams through the file once more (every encrypted chunk and every checksum) without extracting
+anything.
 
 ---
 
@@ -101,8 +104,9 @@ can exercise them.
 2. **Claude Code.** Install it following Anthropic's current instructions, then start `claude` once in any
    directory and sign in when prompted (`/login` inside the session). This creates `~/.claude` and
    `~/.claude.json` with your account and makes sure the version on the mini can read the transcripts you are
-   about to restore. **Quit Claude Code afterwards** — the restore refuses to write into `~/.claude` while a
-   session is running.
+   about to restore. **Quit Claude Code afterwards** — the restore plan warns while a session is running,
+   because Claude Code rewrites `~/.claude.json` and transcripts in the background and could overwrite what
+   was just restored.
 3. **GitHub CLI** (if you use it): `brew install gh`. Do not sign in yet; that comes after the restore.
 4. **Dev Migration Assistant.** Install the DMG. v0.1 builds are unsigned, so on first launch use
    right-click → **Open**, or `xattr -d com.apple.quarantine "/Applications/Dev Migration Assistant.app"`
@@ -133,8 +137,10 @@ can exercise them.
    - **Steps** with the real destination path of each (`git clone` from bundle, `git worktree add`, apply staged
      and unstaged diffs, copy untracked files, restore Claude sessions, merge `~/.claude.json` entries, copy
      env files).
-   - **Preflight checks** — `git` present, Claude Code not running, destination writable, enough free space,
-     provider schema versions understood. A blocking failure disables the Restore button; fix it and re-plan.
+   - **Preflight checks** — `git` present, destination writable, enough free space (1.2 × the payload), bundle
+     and branch names valid, provider schema versions understood (all blocking), plus warnings such as
+     _Claude Code not running_ and _project directory encoding verified_. A blocking failure disables the
+     Restore button; fix it and re-plan. Treat the Claude Code warning as blocking anyway: quit and re-plan.
    - **Collisions** — every existing destination file, repository, worktree path or Claude project directory,
      each with a non-destructive default of **skip**. Change a collision to **merge** (Claude sessions are added
      by session id, `~/.claude.json` entries and history are add-only), **backup-then-replace** (the original is
@@ -175,8 +181,9 @@ Inside the session, `/memory` should show your `CLAUDE.md` hierarchy and auto-me
 `claude mcp list` (from the shell) should show the MCP servers you migrated. If you restored a worktree session,
 `claude --resume` from inside that worktree re-enters it.
 
-Claude Code will show its **workspace trust** prompt for the new folder on first start — trust decisions are
-deliberately not carried between machines.
+Your **workspace trust** decision travels with the restored `~/.claude.json` project entry (it is your own
+project). If Claude Code still shows the trust prompt for the new folder, accept it once; if you would rather be
+asked again, remove `hasTrustDialogAccepted` from that entry.
 
 ---
 
@@ -207,6 +214,10 @@ want):
 The restore report warns when sessions in the backup are older than the destination's current retention
 period.
 
+**Safety copy.** Before touching `~/.claude.json` the app writes a timestamped copy to
+`~/.claude/devmig-backups/claude.json.<timestamp>.bak`. If anything about the merged entries looks wrong, that
+file is the pre-restore state.
+
 ---
 
 ## 7. Troubleshooting
@@ -226,11 +237,11 @@ The copy is damaged or incomplete — compare sizes, re-copy, or re-AirDrop. The
 bad chunk and writes nothing. A backup created with a newer app version than the one installed reports
 `ARCHIVE_UNSUPPORTED_VERSION`; update the app on the mini.
 
-**Preflight: "Claude Code is running" (`CLAUDE_RUNNING`).**
+**Preflight warning: "Claude Code not running" shows live pids.**
 Quit every Claude Code session (including ones started by editor extensions or `claude -p` scripts) and
-re-plan. `pgrep -fl claude` shows what is still running. The check looks at Claude Code's live session registry
-under `~/.claude/sessions/` as well as processes; a stale entry after a crash disappears on the next Claude
-Code start/exit.
+re-plan. `pgrep -fl claude` shows what is still running. The check reads Claude Code's live session registry
+under `~/.claude/sessions/` and probes each recorded pid; a stale entry after a crash is ignored once its
+process is gone. In v0.1 the check is a warning, not a hard stop — do not proceed while it shows a pid.
 
 **Preflight: `git` not found (`GIT_NOT_INSTALLED`).**
 Install the Command Line Tools (`xcode-select --install`) or Homebrew git, restart the app, re-plan.
@@ -258,9 +269,11 @@ Change the collision's policy in the plan: skip (default), merge where offered, 
 alternate path. Restoring with skip/merge defaults is safe to run twice.
 
 **`git apply` failed for the unstaged or staged diff (`GIT_APPLY_FAILED`).**
-The bundle and clone are still valid; the working-tree delta could not be applied cleanly (usually because
-the destination already had local modifications — pick backup-then-replace or a fresh path). The report names
-the diff file inside the backup so you can apply it by hand.
+The repository is still restored; the working-tree delta could not be applied cleanly (usually because the
+destination already had local modifications — pick backup-then-replace or a fresh path). The diff files are
+left in `<worktree>/.devmig-unapplied/` so you can inspect them and apply by hand
+(`git apply --index --binary .devmig-unapplied/staged.diff`, then `git apply --binary
+.devmig-unapplied/unstaged.diff`).
 
 **macOS asks for permission to access Desktop / Documents / a removable volume.**
 Grant it; the app reads project folders and backup files only where you point it. If repositories live in a

@@ -88,6 +88,8 @@ export const PlannedFile = z.object({
   destination: AbsolutePath,
   pathChanged: z.boolean(),
   collisionId: z.string().min(1).optional(),
+  /** Where the existing file is moved when its collision is resolved with backup-then-replace. */
+  asidePath: AbsolutePath.optional(),
   sha256: Sha256,
   sizeBytes: z.number().int().nonnegative(),
   mode: Mode,
@@ -97,6 +99,8 @@ export type PlannedFile = z.infer<typeof PlannedFile>
 
 export const PlanState = z.object({
   files: z.array(PlannedFile),
+  /** Every aside path the restore may create (one per collision); the engine may add them to its roots. */
+  asidePaths: z.array(AbsolutePath).default([]),
 })
 export type PlanState = z.infer<typeof PlanState>
 

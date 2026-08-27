@@ -33,5 +33,6 @@ export {
 export type { GitClient, GitVersion, StatusEntry, WorktreeListEntry } from './git'
 export { worktreesOf, isJunkPath, slugForPath, parseSelection } from './common'
 export type { WorktreeRef, GitSelection } from './common'
+export { backupAsidePathFor, backupAsidePathsFrom } from './plan'
 export { HOOK_GUARD_ARGS } from './restore'
 export { DIFF_WARN_BYTES } from './backup'

@@ -65,10 +65,12 @@ export interface CandidateDir {
 }
 
 const SESSION_FILE_RE = /^([A-Za-z0-9._-]+)\.jsonl$/
+/** Files this provider writes next to transcripts during merges; never sessions. */
+const PROVIDER_SIDE_FILE_RE = /\.devmig-/
 
 export function sessionIdFromFileName(name: string): string | null {
   const m = SESSION_FILE_RE.exec(name)
-  if (!m || !m[1] || m[1].startsWith('.')) return null
+  if (!m || !m[1] || m[1].startsWith('.') || PROVIDER_SIDE_FILE_RE.test(m[1])) return null
   return m[1]
 }
 
