@@ -19,7 +19,11 @@ module.exports = async function afterPack(context) {
   const appPath = path.join(context.appOutDir, appName)
   // --deep is sufficient for an ad-hoc signature over Electron's nested helpers/frameworks.
   // No --options runtime: hardened runtime + ad-hoc would enforce library validation against Apple-signed Electron frameworks.
-  execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', appPath], { stdio: 'inherit' })
-  execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=1', appPath], { stdio: 'inherit' })
+  execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', appPath], {
+    stdio: 'inherit',
+  })
+  execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=1', appPath], {
+    stdio: 'inherit',
+  })
   console.log(`  • ad-hoc signed  ${appName} (no signing identity configured)`)
 }
