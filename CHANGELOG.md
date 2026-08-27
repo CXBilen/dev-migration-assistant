@@ -8,6 +8,12 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] - 2026-08-28
+
+### Changed
+
+- The DMG volume icon is the app icon itself.
+
 ## [0.1.0-alpha.3] - 2026-08-28
 
 Packaging polish for the UI preview; no functional change in the app itself.
