@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist", "emitDeclarationOnly": true },
-  "include": ["src"],
-  "references": [{ "path": "../model" }, { "path": "../shared" }, { "path": "../archive" }]
+  "compilerOptions": { "composite": true },
+  "files": [],
+  "references": [{ "path": "./tsconfig.lib.json" }, { "path": "./tsconfig.migration.json" }]
 }

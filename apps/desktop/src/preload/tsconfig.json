@@ -1,0 +1,14 @@
+{
+  "// purpose": "Nearest tsconfig for the preload tree: lets ESLint's project service and editors type-check the *.test.ts files that ../../tsconfig.node.json excludes. Type-checking of production code is still driven by ../../tsconfig.node.json.",
+  "extends": "../../tsconfig.node.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["./**/*.ts"],
+  "exclude": []
+}

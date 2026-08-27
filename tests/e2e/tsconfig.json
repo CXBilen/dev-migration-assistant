@@ -4,8 +4,25 @@
     "rootDir": ".",
     "outDir": "../../out/types-e2e",
     "emitDeclarationOnly": true,
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"]
   },
   "include": ["./**/*.ts"],
-  "references": [{ "path": "../../packages/model" }, { "path": "../../packages/test-utils" }]
+  "references": [
+    {
+      "path": "../../packages/model"
+    },
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/archive"
+    },
+    {
+      "path": "../../packages/ipc-contracts"
+    },
+    {
+      "path": "../../packages/test-utils"
+    }
+  ]
 }

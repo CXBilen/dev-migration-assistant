@@ -2,7 +2,7 @@
   "name": "@devmig/desktop",
   "version": "0.1.0-alpha.4",
   "private": true,
-  "description": "Dev Migration Assistant \u2014 Migration Assistant, but for developers.",
+  "description": "Dev Migration Assistant — Migration Assistant, but for developers.",
   "productName": "Dev Migration Assistant",
   "author": "Cem Bilen",
   "license": "MIT",
@@ -16,6 +16,7 @@
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64 --config electron-builder.yml",
+    "dist:dir": "electron-vite build && electron-builder --mac --arm64 --dir --config electron-builder.yml",
     "dist:mac:universal": "electron-vite build && electron-builder --mac --universal --config electron-builder.yml"
   },
   "devDependencies": {

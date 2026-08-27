@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist/migration-test",
+    "emitDeclarationOnly": true
+  },
+  "include": ["src/migration.integration.test.ts"],
+  "references": [
+    { "path": "../model" },
+    { "path": "../shared" },
+    { "path": "../archive" },
+    { "path": "./tsconfig.lib.json" },
+    { "path": "../providers/claude-code" },
+    { "path": "../providers/git" },
+    { "path": "../providers/project-files" },
+    { "path": "../providers/runtime" },
+    { "path": "../test-utils" }
+  ]
+}

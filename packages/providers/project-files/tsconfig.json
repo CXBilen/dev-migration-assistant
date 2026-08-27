@@ -5,7 +5,7 @@
   "references": [
     { "path": "../../model" },
     { "path": "../../shared" },
-    { "path": "../../core" },
+    { "path": "../../core/tsconfig.lib.json" },
     { "path": "../../test-utils" }
   ]
 }

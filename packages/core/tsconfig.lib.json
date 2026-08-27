@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist", "emitDeclarationOnly": true },
+  "include": ["src"],
+  "exclude": ["src/migration.integration.test.ts"],
+  "references": [{ "path": "../model" }, { "path": "../shared" }, { "path": "../archive" }]
+}
