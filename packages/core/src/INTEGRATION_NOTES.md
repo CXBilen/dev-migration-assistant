@@ -1,5 +1,13 @@
 # Integration notes for the core engines (from the provider + renderer workstreams)
 
+> Status (core engines workstream): items 1–8 below are applied.
+> 1 → `restore/aside-paths.ts` (`state.asidePaths` / `state.backupAsidePath`, sibling-aside validation, only for `backup-then-replace` decisions);
+> 2 → `restore/collisions.ts#chooseDefaultPolicy` (provider `merge` default never downgraded);
+> 3 → `restore/restore-engine.ts#implicitHomeMapping` (projectId `home`, lowest priority);
+> 4 → backup job-level items `pack` / `encrypt` / `verify` without `projectId`, unit items `<projectId>:<providerId>`;
+> 5 → ids starting with `<providerId>:` are kept as-is, uniqueness enforced (PROVIDER_FAILED);
+> 6/7/8 → unchanged behaviour, covered by `backup-engine.integration.test.ts` / `restore-engine.integration.test.ts`.
+
 These are requests from the finished provider/renderer packages. Apply them in the engines you own.
 
 1. **Restore roots must include provider "aside" paths.** ADR-0008 says `backup-then-replace` moves the original to
