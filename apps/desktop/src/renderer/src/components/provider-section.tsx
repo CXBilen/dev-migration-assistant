@@ -5,6 +5,7 @@ import { cn } from '../lib/cn'
 import { formatBytes } from '../lib/format'
 import { ArtifactRow } from './artifact-row'
 import { SummaryList } from './summary-list'
+import { WarningList } from './warning-list'
 
 export function ProviderIcon({
   providerId,
@@ -67,13 +68,7 @@ export function ProviderSection({
         ) : null}
       </div>
       <SummaryList items={result.summary} className="mt-2" />
-      {result.warnings.length > 0 ? (
-        <ul className="mt-2 flex flex-col gap-1 text-[12px] text-warn">
-          {result.warnings.map((w) => (
-            <li key={w}>! {w}</li>
-          ))}
-        </ul>
-      ) : null}
+      <WarningList warnings={result.warnings} variant="plain" className="mt-2 text-[12px]" />
       {artifacts.length > 0 ? (
         <div className="mt-2 divide-y divide-border rounded-control bg-panel-2 px-3">
           {artifacts.map((a) => (

@@ -29,8 +29,13 @@ project location changes.
   </picture>
 </p>
 
-> **Status:** v0.1 (pre-release) · macOS 13+ · Apple Silicon · local-only, no accounts, no telemetry.
-> _Screenshots will be added once the UI is final._
+> **Status:** v0.1.0-alpha (pre-release) · macOS 13+ · Apple Silicon · local-only, no accounts, no telemetry.
+
+<p align="center">
+  <img src="docs/assets/screenshots/home.png" alt="Home screen: Create Backup and Restore Backup" width="49%" />
+  <img src="docs/assets/screenshots/diagnostics.png" alt="Diagnostics screen: app, Claude Code and provider status" width="49%" />
+</p>
+<p align="center"><sub>Alpha screenshots — the renderer is shown on preview data while the native bridge is being wired.</sub></p>
 
 **In 30 seconds**
 

@@ -3,6 +3,7 @@ import { FolderOpen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { getApi } from '../../api'
+import { WarningList } from '../../components/warning-list'
 import { WizardPage } from '../../components/wizard-page'
 import { Button } from '../../components/ui/button'
 import { ErrorPanel } from '../../components/ui/error-panel'
@@ -272,13 +273,7 @@ export function RestoreMappingScreen(): React.JSX.Element {
                   ))}
                 </ul>
               ) : null}
-              {report.warnings.length > 0 ? (
-                <ul className="flex flex-col gap-1 text-[12.5px] text-warn">
-                  {report.warnings.map((w) => (
-                    <li key={w}>! {w}</li>
-                  ))}
-                </ul>
-              ) : null}
+              <WarningList warnings={report.warnings} variant="plain" />
               {report.unsupportedReferences.length > 0 ? (
                 <div>
                   <p className="text-[12px] font-semibold text-fg-muted">

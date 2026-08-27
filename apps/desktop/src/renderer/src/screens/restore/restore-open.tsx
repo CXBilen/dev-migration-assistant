@@ -152,8 +152,14 @@ export function RestoreOpenScreen(): React.JSX.Element {
                 { key: 'Created', value: formatDateTime(headerInfo.createdAt) },
               ]}
             />
+          ) : select.error ? (
+            <p className="text-[13px] text-danger" data-testid="restore-header-failed">
+              The file header could not be read. Choose another .devbackup file.
+            </p>
           ) : (
-            <p className="text-[13px] text-fg-muted">Reading header…</p>
+            <p className="text-[13px] text-fg-muted" role="status">
+              Reading header…
+            </p>
           )}
         </Panel>
       )}

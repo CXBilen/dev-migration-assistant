@@ -16,7 +16,7 @@ export function PathText({
   const shown = abbreviate ? abbreviatePath(path, homeDir) : path
   return (
     <span
-      className={cn('selectable font-mono text-[12px] text-fg-muted break-all', className)}
+      className={cn('selectable font-mono text-[12px] text-fg-muted wrap-anywhere', className)}
       title={path}
     >
       {shown}

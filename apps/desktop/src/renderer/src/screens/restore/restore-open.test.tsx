@@ -2,6 +2,8 @@ import '@testing-library/jest-dom/vitest'
 import '../../test/setup'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { IpcError } from '@devmig/ipc-contracts'
+import { setApiForTests } from '../../api'
 import { MOCK_DEMO_PASSWORD } from '../../api/mock-api'
 import { useRestoreWizard } from '../../stores/restore-wizard'
 import { installMockApi, renderApp } from '../../test/helpers'
@@ -55,5 +57,34 @@ describe('Restore — open backup', () => {
       /Update Dev Migration Assistant/,
     )
     expect(screen.getByTestId('restore-unlock')).toBeDisabled()
+  })
+
+  it('shows an actionable error when the header cannot be read', async () => {
+    const api = installMockApi()
+    setApiForTests({
+      ...api,
+      backups: {
+        ...api.backups,
+        readHeader: () =>
+          Promise.reject(
+            new IpcError(
+              'ARCHIVE_INVALID',
+              'Not a .devbackup file (bad magic).',
+              'Choose a file created by Dev Migration Assistant.',
+            ),
+          ),
+      },
+    })
+    renderApp('/restore')
+    fireEvent.click(screen.getByTestId('restore-select-file'))
+    await screen.findByTestId('restore-header-failed')
+    expect(screen.getByTestId('error-panel')).toHaveTextContent('Backup file rejected')
+    expect(screen.getByTestId('error-panel-hint')).toHaveTextContent(
+      'Choose a file created by Dev Migration Assistant.',
+    )
+    expect(screen.queryByTestId('restore-password')).not.toBeInTheDocument()
+    expect(screen.getByTestId('restore-unlock')).toBeDisabled()
+    // Choosing another file is still possible from the same screen.
+    expect(screen.getByTestId('restore-select-file')).toBeEnabled()
   })
 })

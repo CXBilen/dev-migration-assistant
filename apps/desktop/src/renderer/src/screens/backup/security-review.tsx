@@ -181,7 +181,7 @@ export function SecurityReviewScreen(): React.JSX.Element {
           </Group>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:sticky lg:top-0 lg:self-start">
           <Panel
             title="Encryption"
             description="Argon2id key derivation, AES-256-GCM. Forgetting the password means the backup cannot be opened."

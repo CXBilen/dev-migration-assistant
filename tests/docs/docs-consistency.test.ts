@@ -202,7 +202,7 @@ describe('README claims match the repository', () => {
     const readme = await readText('README.md')
     expect(readme).toContain('Migration Assistant, but for developers.')
     expect(readme).toContain('Your machine. Your code. Your context.')
-    expect(readme).toContain('Screenshots will be added once the UI is final')
+    expect(readme).toContain('docs/assets/screenshots/home.png')
     for (const heading of [
       '## The problem',
       '## The solution',

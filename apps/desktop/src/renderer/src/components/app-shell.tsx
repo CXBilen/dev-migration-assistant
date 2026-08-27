@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router'
 import { getApi } from '../api'
 import { cn } from '../lib/cn'
 import { ROUTES, wizardFor } from '../lib/routes'
+import appIcon from '../assets/app-icon.svg'
 
 /**
  * Window chrome: translucent sidebar (vibrancy shows through), a 52px draggable titlebar band
@@ -30,9 +31,13 @@ export function AppShell({ children }: { children: React.ReactNode }): React.JSX
             className="mb-4 flex items-center gap-2 rounded-control px-2 py-1 text-[13px] font-semibold text-fg hover:bg-control-hover"
             data-testid="sidebar-home"
           >
-            <span className="inline-flex size-5 items-center justify-center rounded-[6px] bg-accent text-accent-fg">
-              <ArrowsGlyph />
-            </span>
+            <img
+              src={appIcon}
+              alt=""
+              aria-hidden
+              className="size-6 shrink-0 select-none"
+              draggable={false}
+            />
             Dev Migration Assistant
           </Link>
 
@@ -146,19 +151,5 @@ function SidebarLink({
     >
       {label}
     </NavLink>
-  )
-}
-
-function ArrowsGlyph(): React.JSX.Element {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-      <path
-        d="M2 4h6.5M6.5 2l2 2-2 2M10 8H3.5M5.5 6l-2 2 2 2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }

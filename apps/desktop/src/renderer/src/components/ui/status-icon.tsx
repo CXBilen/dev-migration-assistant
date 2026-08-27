@@ -1,4 +1,4 @@
-import { Check, Circle, CircleAlert, CircleDashed, Minus, TriangleAlert, X } from 'lucide-react'
+import { Check, Circle, CircleDashed, Info, Minus, TriangleAlert, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { Spinner } from './spinner'
 
@@ -81,7 +81,7 @@ export function StatusIcon({
         </span>
       )
     case 'info':
-      return <CircleAlert className={cn(common, 'text-info', className)} {...aria} />
+      return <Info className={cn(common, 'text-info', className)} {...aria} />
     case 'excluded':
     case 'skipped':
       return <Minus className={cn(common, 'text-fg-faint', className)} {...aria} />

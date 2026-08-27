@@ -29,11 +29,19 @@ mac:
   notarize: false
 dmg:
   sign: false
+  # Drag-and-drop layout: app on the left, Applications shortcut on the right, arrow drawn in the background image.
+  background: build/background.png
+  icon: build/icon.icns
+  iconSize: 128
+  window:
+    width: 660
+    height: 420
   contents:
-    - x: 130
-      y: 220
-    - x: 410
-      y: 220
+    - x: 160
+      y: 210
+      type: file
+    - x: 500
+      y: 210
       type: link
       path: /Applications
 publish: null

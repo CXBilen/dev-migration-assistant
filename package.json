@@ -1,6 +1,6 @@
 {
   "name": "dev-migration-assistant",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "Migration Assistant, but for developers. Back up and restore the real local state of your projects \u2014 Claude Code sessions, Git working trees, worktrees and local config \u2014 between Macs.",
   "license": "MIT",

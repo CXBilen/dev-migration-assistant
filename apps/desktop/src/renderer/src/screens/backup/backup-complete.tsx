@@ -1,6 +1,7 @@
 import { FolderOpen, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { getApi } from '../../api'
+import { WarningList } from '../../components/warning-list'
 import { WizardPage } from '../../components/wizard-page'
 import { Button } from '../../components/ui/button'
 import { EmptyState } from '../../components/ui/empty-state'
@@ -121,11 +122,7 @@ export function BackupCompleteScreen(): React.JSX.Element {
       </Panel>
       {result.warnings.length > 0 ? (
         <Panel title="Warnings" testId="backup-warnings">
-          <ul className="flex flex-col gap-1 text-[13px] text-warn">
-            {result.warnings.map((w) => (
-              <li key={w}>! {w}</li>
-            ))}
-          </ul>
+          <WarningList warnings={result.warnings} variant="plain" className="text-[13px]" />
         </Panel>
       ) : null}
       <p className="text-[12.5px] text-fg-muted">

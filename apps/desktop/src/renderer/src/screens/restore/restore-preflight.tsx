@@ -5,6 +5,7 @@ import { Navigate, useNavigate } from 'react-router'
 import { getApi } from '../../api'
 import { JobEventLog } from '../../components/job-event-log'
 import { PhaseStrip } from '../../components/phase-strip'
+import { WarningList } from '../../components/warning-list'
 import { WizardPage } from '../../components/wizard-page'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
@@ -163,17 +164,7 @@ export function RestorePreflightScreen(): React.JSX.Element {
           }}
         />
       ) : null}
-      {plan.warnings.length > 0 ? (
-        <ul
-          className="rounded-panel bg-warn-soft px-4 py-3 text-[13px] text-warn"
-          role="status"
-          data-testid="plan-warnings"
-        >
-          {plan.warnings.map((w) => (
-            <li key={w}>! {w}</li>
-          ))}
-        </ul>
-      ) : null}
+      <WarningList warnings={plan.warnings} testId="plan-warnings" />
 
       <SectionLabel>Preflight checks</SectionLabel>
       <Panel padded={false} testId="plan-preflight">
@@ -271,13 +262,7 @@ export function RestorePreflightScreen(): React.JSX.Element {
                 ))}
               </ul>
             ) : null}
-            {plan.remap.warnings.length > 0 ? (
-              <ul className="flex flex-col gap-1 text-[12.5px] text-warn">
-                {plan.remap.warnings.map((w) => (
-                  <li key={w}>! {w}</li>
-                ))}
-              </ul>
-            ) : null}
+            <WarningList warnings={plan.remap.warnings} variant="plain" />
             {plan.remap.unsupportedReferences.length > 0 ? (
               <ul className="flex flex-col gap-1 text-[12.5px]" data-testid="plan-unsupported">
                 {plan.remap.unsupportedReferences.map((u, i) => (
@@ -308,13 +293,7 @@ export function RestorePreflightScreen(): React.JSX.Element {
             </span>
           }
         >
-          {p.warnings.length > 0 ? (
-            <ul className="border-b border-border px-4 py-2 text-[12px] text-warn">
-              {p.warnings.map((w) => (
-                <li key={w}>! {w}</li>
-              ))}
-            </ul>
-          ) : null}
+          <WarningList warnings={p.warnings} variant="inset" />
           <ol className="divide-y divide-border px-4">
             {p.steps.map((s, i) => (
               <li

@@ -2,6 +2,7 @@ import type { ProjectScanResult } from '@devmig/model'
 import { GitBranch } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router'
 import { ProviderSection } from '../../components/provider-section'
+import { WarningList } from '../../components/warning-list'
 import { WizardPage } from '../../components/wizard-page'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
@@ -85,13 +86,7 @@ export function BackupReviewScreen(): React.JSX.Element {
         </Button>
       }
     >
-      {scan.warnings.length > 0 ? (
-        <ul className="rounded-panel bg-warn-soft px-4 py-3 text-[13px] text-warn" role="status">
-          {scan.warnings.map((w) => (
-            <li key={w}>! {w}</li>
-          ))}
-        </ul>
-      ) : null}
+      <WarningList warnings={scan.warnings} testId="review-warnings" />
       {weakCount > 0 ? (
         <p className="text-[13px] text-fg-muted" data-testid="review-weak-notice">
           <Badge tone="warn">Needs review</Badge>{' '}
@@ -184,13 +179,7 @@ function ProjectCard({
         </span>
       }
     >
-      {project.warnings.length > 0 ? (
-        <ul className="border-b border-border px-4 py-2 text-[12px] text-warn">
-          {project.warnings.map((w) => (
-            <li key={w}>! {w}</li>
-          ))}
-        </ul>
-      ) : null}
+      <WarningList warnings={project.warnings} variant="inset" />
       <div className="divide-y divide-border px-4">
         {providerResultsSorted(project.providers, providerRank).map((r) => (
           <ProviderSection

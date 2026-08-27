@@ -2,6 +2,7 @@ import type { AttentionItem, ProviderRestoreOutcome } from '@devmig/model'
 import { FolderOpen, Terminal } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { getApi } from '../../api'
+import { WarningList } from '../../components/warning-list'
 import { WizardPage } from '../../components/wizard-page'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
@@ -99,13 +100,7 @@ export function RestoreReportScreen(): React.JSX.Element {
     >
       {openTerminal.error ? <ErrorPanel error={openTerminal.error} /> : null}
       {openFinder.error ? <ErrorPanel error={openFinder.error} /> : null}
-      {result.warnings.length > 0 ? (
-        <ul className="rounded-panel bg-warn-soft px-4 py-3 text-[13px] text-warn" role="status">
-          {result.warnings.map((w) => (
-            <li key={w}>! {w}</li>
-          ))}
-        </ul>
-      ) : null}
+      <WarningList warnings={result.warnings} testId="report-warnings" />
 
       {result.attention.length > 0 ? (
         <>
