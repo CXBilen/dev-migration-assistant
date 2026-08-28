@@ -263,6 +263,10 @@ checksums.json                      last entry; zod `Checksums`
 `projects/p1/claude-code/sessions`). The layout under a provider directory is that provider's
 business and is versioned by `manifest.providers[providerId]` (its `schemaVersion`).
 
+- `manifest.capabilities` — `CapabilitySnapshot` (optional, v0.2+): tools `{id, version, path,
+installMethod}`, `search.paths`, integrations/plugins/marketplaces (names only), `claude {version,
+installMethod, transcriptWriterVersions}`. Additive; `formatVersion` stays 1.
+
 ### 7.5 `checksums.json`
 
 ```json
@@ -301,6 +305,8 @@ business and is versioned by `manifest.providers[providerId]` (its `schemaVersio
 - Provider payload layouts are versioned independently through `manifest.providers[providerId]`
   (`schemaVersion`). A provider may refuse or downgrade an unknown schema version; the container
   is not affected.
+- `capabilities` is optional; v0.1 readers ignore it and v0.2 readers treat its absence as _not
+  captured_.
 - Deliberately **not** in v1 (candidates for v2): payload compression (`payload.compression`, gzip
   or zstd inside the encryption with a decompressed-byte cap), a keyfile / Keychain-bound Argon2
   secret, multiple recipients, and per-entry random access.

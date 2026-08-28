@@ -54,6 +54,12 @@ Everything runs locally. No account, no server, no telemetry, no cloud upload. B
 Packages are consumed from TypeScript source (`exports: ./src/index.ts`); electron-vite bundles them into the app,
 Vitest runs them directly, `tsc -b` type-checks via project references.
 
+**Search path.** `createEnvironment` resolves `PATH` deterministically (`packages/core/src/search-path.ts`):
+the launch PATH, `/etc/paths` and `/etc/paths.d/*`, then the well-known user tool directories that
+exist (`/opt/homebrew/bin`, `~/.local/bin`, `~/.bun/bin`, version-manager shims, …). No login shell is
+spawned. Every `Exec` call receives this env; tool probes record the resolved executable path and an
+install-method classification.
+
 ## Key flows
 
 ### Create Backup

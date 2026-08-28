@@ -43,7 +43,7 @@ export interface BaseContext {
   homeDir: string
   /** Effective Claude config dir: $CLAUDE_CONFIG_DIR or <homeDir>/.claude. */
   claudeConfigDir: string
-  /** Path of ~/.claude.json (next to homeDir, not inside claudeConfigDir). */
+  /** Path of ~/.claude.json — inside claudeConfigDir when CLAUDE_CONFIG_DIR is set, else next to the home dir. */
   claudeJsonPath: string
   env: Record<string, string | undefined>
   exec: Exec

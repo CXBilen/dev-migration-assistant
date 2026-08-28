@@ -10,3 +10,4 @@ fixtures/**/*.jsonl
 playwright-report
 test-results
 apps/desktop/build/
+.superpowers/

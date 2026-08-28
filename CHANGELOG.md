@@ -8,8 +8,32 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+### Added
+
+- Every backup now records a **capability snapshot** (`manifest.capabilities`): developer tools with
+  version, resolved path and install method, the search path used, and the Claude Code versions that
+  wrote the transcripts. Names and paths only — never credentials, env values or account details.
+- Diagnostics lists the developer tools it found (version, path, install method) and the directories
+  it searches.
+
+### Changed
+
+- The app resolves a deterministic search path (launchd `PATH` + `/etc/paths(.d)` + the well-known
+  user tool directories that exist) instead of relying on the environment it was launched with. A
+  Finder-launched build previously reported `claude`, `gh`, `brew`, `node` and `pnpm` as _not
+  installed_ when they lived in `~/.local/bin` or `/opt/homebrew/bin`. No login shell is spawned.
+- The remediation catalogue moved to `@devmig/core` (`Remediation` type in `@devmig/model`); the
+  `nvm install` suggestion (a shell function) became `brew install node@<major>`, and the invalid
+  `brew install npm` became `brew install node`.
+
 ### Security
 
+- MCP server definitions in `~/.claude.json` whose `args` or `url` carry a secret-looking value
+  (e.g. `API_KEY=…` inline) now make the corresponding artifact **sensitive and opt-in**; previously
+  they were included as safe.
+- `session-env/` scripts (hook-generated per-session environment files, which hooks may fill with
+  secrets) are no longer backed up or restored; they are listed as ephemeral and Claude Code
+  regenerates them.
 - Git remote URLs are stored without embedded credentials — in the manifest and in the Git provider's
   `repository.json` — and are restored without them (`https://user:token@…` → `https://…`); sign in again
   through your credential helper on the destination.
