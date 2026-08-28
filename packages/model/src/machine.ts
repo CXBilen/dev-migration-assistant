@@ -1,10 +1,25 @@
 import { z } from 'zod'
 
+/** Where an executable came from (informational; derived from its resolved path). */
+export const InstallMethod = z.enum([
+  'native',
+  'homebrew',
+  'npm-global',
+  'corepack',
+  'version-manager',
+  'system',
+  'manual',
+  'unknown',
+])
+export type InstallMethod = z.infer<typeof InstallMethod>
+
 export const ToolVersion = z.object({
   id: z.string(),
   label: z.string(),
   version: z.string().nullable(),
   path: z.string().nullable().optional(),
+  /** Informational; an install method a newer app knows and this reader does not degrades to undefined. */
+  installMethod: InstallMethod.optional().catch(undefined),
   installed: z.boolean(),
 })
 export type ToolVersion = z.infer<typeof ToolVersion>

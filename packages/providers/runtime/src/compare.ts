@@ -1,218 +1,19 @@
-/**
- * Source-vs-destination comparison of development tools. Produces the restore report rows, the
- * attention items and structured remediations. Pure: no I/O.
- */
-import type { AttentionItem, MachineInfo, ResultItem, ToolVersion } from '@devmig/model'
-import { REMEDIATIONS, formatRemediation, type Remediation } from './remediation'
+/** Project-level comparison; the machine-level `compareMachines` lives in @devmig/core. */
+import {
+  REMEDIATIONS,
+  attentionFor,
+  majorOf,
+  toolLabel,
+  toolOf,
+  toolVersionOf,
+  type ComparisonOutput,
+  type Remediation,
+} from '@devmig/core'
+import type { AttentionItem, MachineInfo, ResultItem } from '@devmig/model'
 import type { ProjectRuntimeInfo } from './schema'
-import { displayVersion, majorOf, toolLabel } from './versions'
 
-export const RUNTIME_PROVIDER_ID = 'runtime'
-
-export type GhAuthStatus = 'ok' | 'unauthenticated' | 'unavailable' | 'not-installed'
-
-export interface ComparisonOutput {
-  items: ResultItem[]
-  attention: AttentionItem[]
-  remediations: Remediation[]
-}
-
-function tool(machine: MachineInfo, id: string): ToolVersion | undefined {
-  return machine.tools.find((t) => t.id === id)
-}
-
-function version(t: ToolVersion | undefined): string | null {
-  return t?.installed ? (displayVersion(t.version) ?? '?') : null
-}
-
-function attentionFor(
-  id: string,
-  level: AttentionItem['level'],
-  title: string,
-  action: AttentionItem['action'],
-  remediation: Remediation,
-): AttentionItem {
-  return {
-    id: `${RUNTIME_PROVIDER_ID}:${id}`,
-    providerId: RUNTIME_PROVIDER_ID,
-    level,
-    title,
-    detail: formatRemediation(remediation),
-    action,
-  }
-}
-
-function osLabel(machine: MachineInfo): string {
-  const os = machine.platform === 'darwin' ? 'macOS' : machine.platform
-  return `${os}${machine.osVersion ? ` ${machine.osVersion}` : ''} ${machine.arch}`
-}
-
-/** Compares the source machine (from the backup) with the destination (probed now). */
-export function compareMachines(
-  source: MachineInfo,
-  destination: MachineInfo,
-  ghAuth: GhAuthStatus,
-): ComparisonOutput {
-  const items: ResultItem[] = []
-  const attention: AttentionItem[] = []
-  const remediations: Remediation[] = []
-  const push = (a: AttentionItem, r: Remediation): void => {
-    attention.push(a)
-    remediations.push(r)
-  }
-
-  // Platform / architecture
-  if (source.arch !== destination.arch) {
-    const pm =
-      source.tools.find((t) => t.installed && (t.id === 'pnpm' || t.id === 'bun'))?.id ?? null
-    const r = REMEDIATIONS.reinstallNativeDependencies(pm)
-    items.push({
-      label: `CPU architecture differs (${source.arch} → ${destination.arch})`,
-      status: 'warn',
-      detail: 'Native dependencies must be reinstalled',
-    })
-    push(attentionFor('arch', 'warn', 'Reinstall native dependencies', 'manual', r), r)
-  } else {
-    items.push({ label: `${osLabel(source)} → ${osLabel(destination)}`, status: 'info' })
-  }
-
-  // Git
-  const gitDest = tool(destination, 'git')
-  if (gitDest?.installed) {
-    items.push({ label: 'Git installed', status: 'ok', detail: version(gitDest) ?? undefined })
-  } else {
-    const r = REMEDIATIONS.installGit()
-    items.push({
-      label: 'Git not installed',
-      status: 'error',
-      detail: 'Repositories cannot be restored without Git',
-    })
-    push(attentionFor('git-missing', 'warn', 'Git is not installed', 'install', r), r)
-  }
-
-  // Node
-  const nodeSrc = tool(source, 'node')
-  const nodeDest = tool(destination, 'node')
-  const srcMajor = nodeSrc?.installed ? majorOf(nodeSrc.version) : null
-  const destMajor = nodeDest?.installed ? majorOf(nodeDest.version) : null
-  if (nodeDest?.installed && (srcMajor === null || srcMajor === destMajor)) {
-    items.push({
-      label:
-        srcMajor !== null
-          ? `Node compatible (${srcMajor} → ${destMajor ?? '?'})`
-          : `Node installed`,
-      status: 'ok',
-      detail: version(nodeDest) ?? undefined,
-    })
-  } else if (nodeDest?.installed) {
-    const r = REMEDIATIONS.switchNode(srcMajor as number)
-    items.push({
-      label: `Node major differs (${srcMajor} → ${destMajor ?? '?'})`,
-      status: 'warn',
-      detail: `Source ${version(nodeSrc) ?? '?'}, this Mac ${version(nodeDest) ?? '?'}`,
-    })
-    push(
-      attentionFor(
-        'node-major',
-        'warn',
-        `Node.js ${srcMajor} was used on the source machine`,
-        'manual',
-        r,
-      ),
-      r,
-    )
-  } else if (nodeSrc?.installed) {
-    const r = REMEDIATIONS.installNode(srcMajor)
-    items.push({
-      label: 'Node not installed',
-      status: 'warn',
-      detail: `Source used ${version(nodeSrc) ?? '?'}`,
-    })
-    push(attentionFor('node-missing', 'warn', 'Node.js is not installed', 'install', r), r)
-  }
-
-  // Package managers the source machine had
-  for (const id of ['pnpm', 'npm', 'bun'] as const) {
-    const src = tool(source, id)
-    if (!src?.installed) continue
-    const dest = tool(destination, id)
-    const label = toolLabel(id, src.label)
-    if (dest?.installed) {
-      const same = version(src) === version(dest)
-      items.push({
-        label: `${label} installed`,
-        status: 'ok',
-        detail: same
-          ? (version(dest) ?? undefined)
-          : `${version(src) ?? '?'} → ${version(dest) ?? '?'}`,
-      })
-    } else {
-      const r = REMEDIATIONS.installPackageManager(id, version(src))
-      items.push({
-        label: `${label} not installed`,
-        status: 'warn',
-        detail: `Source used ${version(src) ?? '?'}`,
-      })
-      push(attentionFor(`pm-missing-${id}`, 'warn', `${label} is not installed`, 'install', r), r)
-    }
-  }
-
-  // Claude Code
-  const claudeSrc = tool(source, 'claude')
-  const claudeDest = tool(destination, 'claude')
-  if (claudeDest?.installed) {
-    const same = version(claudeSrc) === version(claudeDest)
-    items.push({
-      label: 'Claude Code installed',
-      status: 'ok',
-      detail:
-        claudeSrc?.installed && !same
-          ? `${version(claudeSrc) ?? '?'} → ${version(claudeDest) ?? '?'}`
-          : (version(claudeDest) ?? undefined),
-    })
-  } else {
-    const r = REMEDIATIONS.installClaudeCode()
-    items.push({
-      label: 'Claude Code not installed',
-      status: 'warn',
-      detail: claudeSrc?.installed ? `Source used ${version(claudeSrc) ?? '?'}` : undefined,
-    })
-    push(
-      attentionFor('claude-code-missing', 'warn', 'Claude Code is not installed', 'install', r),
-      r,
-    )
-  }
-
-  // GitHub CLI
-  const ghDest = tool(destination, 'gh')
-  if (!ghDest?.installed || ghAuth === 'not-installed') {
-    const r = REMEDIATIONS.installGh()
-    items.push({ label: 'GitHub CLI not installed', status: 'info' })
-    push(attentionFor('gh-missing', 'info', 'GitHub CLI is not installed', 'install', r), r)
-  } else if (ghAuth === 'ok') {
-    items.push({
-      label: 'GitHub CLI authenticated',
-      status: 'ok',
-      detail: version(ghDest) ?? undefined,
-    })
-  } else {
-    const r = REMEDIATIONS.ghLogin()
-    items.push({
-      label: 'GitHub CLI authentication required',
-      status: 'warn',
-      detail: ghAuth === 'unavailable' ? 'Could not verify the login state' : 'Not logged in',
-    })
-    push(attentionFor('gh-auth', 'warn', 'GitHub CLI authentication required', 'reauth', r), r)
-  }
-
-  // Homebrew (informational)
-  const brewDest = tool(destination, 'brew')
-  if (tool(source, 'brew')?.installed && !brewDest?.installed) {
-    items.push({ label: 'Homebrew not installed', status: 'info', detail: 'https://brew.sh' })
-  }
-
-  return { items, attention, remediations }
-}
+export { RUNTIME_PROVIDER_ID, compareMachines } from '@devmig/core'
+export type { ComparisonOutput, GhAuthStatus } from '@devmig/core'
 
 /** Compares a project's declared runtime with the destination machine. */
 export function compareProjectRuntime(
@@ -226,10 +27,10 @@ export function compareProjectRuntime(
 
   const pm = runtime.packageManager
   if (pm) {
-    const dest = tool(destination, pm.id)
+    const dest = toolOf(destination, pm.id)
     const label = toolLabel(pm.id, pm.id)
     if (dest?.installed) {
-      const destVersion = version(dest)
+      const destVersion = toolVersionOf(dest)
       const mismatch = pm.version !== null && destVersion !== null && pm.version !== destVersion
       items.push({
         label: `${label} installed`,
@@ -257,7 +58,7 @@ export function compareProjectRuntime(
     }
   }
 
-  const nodeDest = tool(destination, 'node')
+  const nodeDest = toolOf(destination, 'node')
   const destMajor = nodeDest?.installed ? majorOf(nodeDest.version) : null
   const pinMajor = runtime.nodePin?.major ?? null
   const engineMajor = majorOf(runtime.engines.node)

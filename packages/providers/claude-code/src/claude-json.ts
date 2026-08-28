@@ -2,6 +2,7 @@
  * ~/.claude.json helpers (research §10, §11): extraction with MCP secrets stripped, add-only merges,
  * and the invariant that identity keys (oauthAccount, userID, machineID) are never written.
  */
+import { classifyJsonValue } from '@devmig/core'
 import { MigrationError, canonicalizePath } from '@devmig/shared'
 import { CLAUDE_JSON_GLOBAL_CONFIG_KEYS, CLAUDE_JSON_IDENTITY_KEYS } from './constants'
 import { readOptionalJson } from './fs-helpers'
@@ -60,6 +61,30 @@ export function stripMcpSecrets(servers: Record<string, unknown> | undefined): S
     if (secret.env || secret.headers) out.secrets[name] = secret
   }
   return out
+}
+
+export interface McpSecretHit {
+  server: string
+  /** JSON path inside the server definition, e.g. `args[2]` or `url`. Never the value. */
+  path: string
+  reason: string
+}
+
+/**
+ * Secret-looking values OUTSIDE env/headers (inline `API_KEY=…` args, `user:password@` urls). Such a
+ * server definition cannot be split into a safe part and a secret part, so the whole artifact that
+ * carries it must be classified sensitive (opt-in).
+ */
+export function findMcpSecretHits(servers: Record<string, unknown> | undefined): McpSecretHit[] {
+  const hits: McpSecretHit[] = []
+  if (!servers) return hits
+  for (const [server, definition] of Object.entries(servers)) {
+    if (!isObject(definition)) continue
+    const { env: _env, headers: _headers, ...rest } = definition
+    for (const hit of classifyJsonValue(rest))
+      hits.push({ server, path: hit.path, reason: hit.reason })
+  }
+  return hits
 }
 
 /** Finds the key of `projects` that refers to `targetPath` (exact after canonicalization). */

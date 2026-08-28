@@ -56,12 +56,16 @@ function materialize(
     (partial.stdoutBuffer !== undefined ? partial.stdoutBuffer.toString('utf8') : '')
   const stdoutBuffer = partial.stdoutBuffer ?? Buffer.from(stdout, 'utf8')
   const exitCode = partial.exitCode ?? 0
+  const timedOut = partial.timedOut ?? false
   return {
     stdout,
     stderr: partial.stderr ?? '',
     stdoutBuffer,
     exitCode,
-    failed: partial.failed ?? exitCode !== 0,
+    // A timed-out child is killed, so realExec always reports it as failed; keep the same
+    // relationship here (an explicit `failed` in the script still wins).
+    failed: partial.failed ?? (exitCode !== 0 || timedOut),
+    timedOut,
     command: partial.command ?? [file, ...args].join(' '),
   }
 }

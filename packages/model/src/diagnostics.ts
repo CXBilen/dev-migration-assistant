@@ -21,6 +21,8 @@ export const Diagnostics = z.object({
   claudeConfigDir: z.string().nullable(),
   claudeConfigDirExists: z.boolean(),
   claudeCodeVersion: z.string().nullable(),
+  /** Directories the app searches for executables (see core/search-path.ts). */
+  searchPaths: z.array(z.string()).default([]),
   providers: z.array(ProviderStatus),
   logsDirectory: z.string(),
   generatedAt: z.string(),

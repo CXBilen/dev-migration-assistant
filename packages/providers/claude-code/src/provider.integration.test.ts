@@ -134,13 +134,15 @@ describe('Claude Code provider: Mac A -> Mac B', () => {
       expect.arrayContaining([
         ['memory', true, 'safe'],
         ['file-history', true, 'safe'],
-        ['session-env', true, 'safe'],
+        ['session-env', false, 'sensitive'],
         ['history', true, 'safe'],
         ['claude-json-project', true, 'safe'],
         ['claude-json-mcp-env', false, 'sensitive'],
         ['project-file', true, 'safe'],
       ]),
     )
+    const sessionEnv = scan.artifacts.find((a) => metaKind(a) === 'session-env')
+    expect(sessionEnv).toMatchObject({ scope: 'ephemeral', selectable: false })
     const sessions = scan.artifacts.filter((a) => metaKind(a) === 'sessions')
     expect(
       sessions.map((a) => (a.meta as { kind: string; confidence: string }).confidence).sort(),
@@ -407,9 +409,11 @@ describe('Claude Code provider: Mac A -> Mac B', () => {
     await fs.stat(path.join(destProjectDir, first.id, 'tool-results', 'result-1.txt'))
     await fs.stat(path.join(destProjectDir, 'memory', 'MEMORY.md'))
     await fs.stat(path.join(dest.home.claudeConfigDir, 'file-history', first.id, 'abc123@v1'))
-    await fs.stat(
-      path.join(dest.home.claudeConfigDir, 'session-env', first.id, 'sessionstart-hook-1.sh'),
-    )
+    await expect(
+      fs.stat(
+        path.join(dest.home.claudeConfigDir, 'session-env', first.id, 'sessionstart-hook-1.sh'),
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
     const history = await readJsonl(path.join(dest.home.claudeConfigDir, 'history.jsonl'))
     expect(history.records).toHaveLength(3)
     expect(history.records.every((r) => r.project === newProjectPath)).toBe(true)

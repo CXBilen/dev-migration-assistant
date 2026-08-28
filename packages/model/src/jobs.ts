@@ -35,6 +35,7 @@ export const RestorePhase = z.enum([
   'RESTORE_WORKTREE_STATE',
   'RESTORE_CLAUDE',
   'RESTORE_PROJECT_FILES',
+  'RESTORE_RUNTIME',
   'VERIFY',
   'REPORT',
   'COMPLETE',

@@ -92,4 +92,56 @@ describe('collectMachineInfo', () => {
     expect(typeof info.osVersion === 'string' || info.osVersion === null).toBe(true)
     expect(info.userName.length).toBeGreaterThan(0)
   })
+
+  it('records the resolved executable path and install method of installed tools', async () => {
+    const home = '/Users/test'
+    const exec = createFakeExec((file) =>
+      file === 'sw_vers'
+        ? { stdout: '15.6.1\n' }
+        : file === 'bun'
+          ? undefined
+          : { stdout: '1.0.0\n' },
+    )
+    const execs = new Map<string, string>([
+      ['/opt/homebrew/bin/gh', '/opt/homebrew/Cellar/gh/2.96.0/bin/gh'],
+      ['/opt/homebrew/bin/brew', '/opt/homebrew/Library/Homebrew/brew.sh'],
+      [`${home}/.local/bin/claude`, `${home}/.local/share/claude/versions/2.1.250`],
+      [
+        `${home}/.local/bin/pnpm`,
+        `${home}/.local/opt/node-v22/lib/node_modules/corepack/dist/pnpm.js`,
+      ],
+      [`${home}/.local/bin/node`, `${home}/.local/opt/node-v22/bin/node`],
+      [`${home}/.local/bin/npm`, `${home}/.local/opt/node-v22/lib/node_modules/npm/bin/npm-cli.js`],
+      ['/usr/bin/git', '/usr/bin/git'],
+    ])
+    const info = await collectMachineInfo(exec, {
+      homeDir: home,
+      platform: 'darwin',
+      userName: 'test',
+      env: { PATH: `/usr/bin:/opt/homebrew/bin:${home}/.local/bin` },
+      io: {
+        isDirectory: () => true,
+        isExecutableFile: (p) => execs.has(p),
+        readTextFile: () => null,
+        listDirectory: () => [],
+        realPath: (p) => execs.get(p) ?? p,
+      },
+    })
+    const byId = new Map(info.tools.map((t) => [t.id, t]))
+    expect(byId.get('gh')).toMatchObject({
+      path: '/opt/homebrew/bin/gh',
+      installMethod: 'homebrew',
+    })
+    expect(byId.get('claude')).toMatchObject({
+      path: `${home}/.local/bin/claude`,
+      installMethod: 'native',
+    })
+    expect(byId.get('pnpm')).toMatchObject({ installMethod: 'corepack' })
+    expect(byId.get('npm')).toMatchObject({ installMethod: 'npm-global' })
+    expect(byId.get('node')).toMatchObject({ installMethod: 'manual' })
+    expect(byId.get('git')).toMatchObject({ path: '/usr/bin/git', installMethod: 'system' })
+    expect(byId.get('bun')).toMatchObject({ installed: false, path: null })
+    expect(byId.get('bun')?.installMethod).toBeUndefined()
+    expect(MachineInfo.parse(info)).toEqual(info)
+  })
 })

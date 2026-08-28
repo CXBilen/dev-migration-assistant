@@ -33,6 +33,7 @@ import {
 import { z } from 'zod'
 import type { BackupEngine, MigrationPlanner, ProjectScanner } from '../api'
 import type { ArchiveAdapter } from '../archive-adapter'
+import { collectCapabilitySnapshot } from '../capabilities/snapshot'
 import { clamp01, errorMessage, makeBaseContext } from '../context'
 import type { Environment } from '../environment'
 import type { JobRunContext } from '../jobs/job-manager'
@@ -84,6 +85,11 @@ export async function writeJsonAtomic(filePath: string, value: unknown): Promise
 function numberFromSummary(summary: Record<string, unknown> | undefined, key: string): number {
   const v = summary?.[key]
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0
+}
+
+function stringsFromSummary(summary: Record<string, unknown> | undefined, key: string): string[] {
+  const value = summary?.[key]
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
 }
 
 function emptyScanResult(providerId: string, projectId?: string): ProviderScanResult {
@@ -281,6 +287,18 @@ export class DefaultBackupEngine implements BackupEngine {
         env: env.env,
         signal: ctx.signal,
       })
+      const transcriptWriterVersions = [
+        ...manifestProjects.flatMap((p) =>
+          p.providers.flatMap((s) => stringsFromSummary(s.summary, 'claudeCodeVersions')),
+        ),
+        ...globalSections.flatMap((s) => stringsFromSummary(s.summary, 'claudeCodeVersions')),
+      ]
+      const capabilities = await collectCapabilitySnapshot(env, {
+        role: 'source',
+        machine,
+        transcriptWriterVersions,
+        signal: ctx.signal,
+      })
       const manifest: Manifest = ManifestSchema.parse({
         format: DEVBACKUP_FORMAT,
         formatVersion: DEVBACKUP_FORMAT_VERSION,
@@ -300,6 +318,7 @@ export class DefaultBackupEngine implements BackupEngine {
           worktreeCount,
         },
         restoreHints,
+        capabilities,
       } satisfies Manifest)
       await writeJsonAtomic(path.join(stagingRoot, 'machine.json'), machine)
       await writeJsonAtomic(path.join(stagingRoot, 'manifest.json'), manifest)

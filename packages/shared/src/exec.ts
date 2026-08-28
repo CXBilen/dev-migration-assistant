@@ -12,6 +12,11 @@ export interface ExecOptions {
   reject?: boolean
   input?: string | Buffer
   maxBuffer?: number
+  /**
+   * `'ignore'` closes the child's stdin so CLIs that would wait for a TTY answer exit instead
+   * (probes must use it). Default `'pipe'`. Ignored when `input` is given.
+   */
+  stdin?: 'pipe' | 'ignore'
 }
 
 export interface ExecResult {
@@ -20,6 +25,8 @@ export interface ExecResult {
   stdoutBuffer: Buffer
   exitCode: number
   failed: boolean
+  /** True when the process was killed because `timeoutMs` elapsed. */
+  timedOut: boolean
   command: string
 }
 
@@ -46,6 +53,9 @@ export const realExec: Exec = async (file, args, options = {}) => {
     input: options.input,
     maxBuffer: options.maxBuffer ?? 256 * 1024 * 1024,
     stripFinalNewline: false,
+    ...(options.input === undefined && options.stdin === 'ignore'
+      ? { stdin: 'ignore' as const }
+      : {}),
   }
   const result = await execa(file, [...args], execaOptions)
   const stdoutBuffer = Buffer.isBuffer(result.stdout)
@@ -59,6 +69,7 @@ export const realExec: Exec = async (file, args, options = {}) => {
     : String(result.stderr ?? '')
   const exitCode = typeof result.exitCode === 'number' ? result.exitCode : -1
   const failed = result.failed || exitCode !== 0
+  const timedOut = result.timedOut === true
   const command = [file, ...args].join(' ')
   if (options.signal?.aborted) {
     throw new MigrationError('CANCELLED', 'The operation was cancelled.', { recoverable: true })
@@ -78,5 +89,5 @@ export const realExec: Exec = async (file, args, options = {}) => {
       },
     )
   }
-  return { stdout, stderr, stdoutBuffer, exitCode, failed, command }
+  return { stdout, stderr, stdoutBuffer, exitCode, failed, timedOut, command }
 }

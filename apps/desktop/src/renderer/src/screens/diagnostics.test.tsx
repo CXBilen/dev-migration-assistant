@@ -20,6 +20,11 @@ describe('Diagnostics', () => {
     expect(screen.getByTestId('diag-claude-dir')).toHaveTextContent('exists')
     expect(screen.getByTestId('diag-provider-git')).toHaveTextContent('available')
     expect(screen.getByTestId('diag-about')).toHaveTextContent('MIT license')
+    expect(screen.getByTestId('diag-tools')).toBeInTheDocument()
+    expect(screen.getByTestId('diag-tool-claude')).toHaveTextContent('2.1.247')
+    expect(screen.getByTestId('diag-tool-claude')).toHaveTextContent('native')
+    expect(screen.getByTestId('diag-tool-gh')).toHaveTextContent('not installed')
+    expect(screen.getByTestId('diag-search-path')).toHaveTextContent('/opt/homebrew/bin')
 
     fireEvent.click(screen.getByTestId('diag-copy'))
     await waitFor(() => expect(screen.getByTestId('diag-copy')).toHaveTextContent('Copied'))

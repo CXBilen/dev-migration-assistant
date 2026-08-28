@@ -40,3 +40,16 @@ describe('phaseChecklist', () => {
     ).toBe(true)
   })
 })
+
+describe('RESTORE_RUN_PHASES', () => {
+  it('lists the restore run phases in the order the engine emits them', () => {
+    expect(RESTORE_RUN_PHASES).toEqual([
+      'RESTORE_REPOSITORIES',
+      'RESTORE_PROJECT_FILES',
+      'RESTORE_CLAUDE',
+      'RESTORE_RUNTIME',
+      'VERIFY',
+    ])
+    expect(phaseLabel('RESTORE_RUNTIME')).toBe('Development runtime')
+  })
+})

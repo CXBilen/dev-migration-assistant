@@ -29,6 +29,7 @@ function service(homeDir: string, execCalls: { file: string; args: readonly stri
       stdoutBuffer: Buffer.alloc(0),
       exitCode: 0,
       failed: false,
+      timedOut: false,
       command: file,
     })
   }

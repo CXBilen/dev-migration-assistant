@@ -5,6 +5,12 @@
 import os from 'node:os'
 import type { MachineInfo, ToolVersion } from '@devmig/model'
 import type { Exec } from '@devmig/shared'
+import {
+  installMethodFor,
+  nodeSearchPathIo,
+  resolveExecutable,
+  type SearchPathIo,
+} from '../search-path'
 
 const TOOL_TIMEOUT_MS = 10_000
 
@@ -16,6 +22,8 @@ export interface CollectMachineInfoInput {
   arch?: string
   userName?: string
   signal?: AbortSignal
+  /** Filesystem access for path resolution; tests inject a fake. */
+  io?: SearchPathIo
 }
 
 interface ToolProbe {
@@ -54,6 +62,8 @@ async function probeTool(
   probe: ToolProbe,
   env: Record<string, string | undefined> | undefined,
   signal: AbortSignal | undefined,
+  homeDir: string,
+  io: SearchPathIo,
 ): Promise<ToolVersion> {
   const missing: ToolVersion = {
     id: probe.id,
@@ -71,7 +81,17 @@ async function probeTool(
     })
     if (result.failed) return missing
     const version = probe.parse(result.stdout)
-    return { id: probe.id, label: probe.label, version, path: null, installed: true }
+    const resolved = resolveExecutable(probe.file, env?.PATH, io)
+    return {
+      id: probe.id,
+      label: probe.label,
+      version,
+      path: resolved,
+      installed: true,
+      ...(resolved
+        ? { installMethod: installMethodFor(resolved, io.realPath(resolved), homeDir) }
+        : {}),
+    }
   } catch {
     return missing
   }
@@ -112,9 +132,12 @@ export async function collectMachineInfo(
       userName = input.env?.USER ?? input.env?.LOGNAME ?? 'unknown'
     }
   }
+  const io = input.io ?? nodeSearchPathIo
   const [osVersion, ...tools] = await Promise.all([
     readOsVersion(exec, platform, input.env, input.signal),
-    ...TOOL_PROBES.map((probe) => probeTool(exec, probe, input.env, input.signal)),
+    ...TOOL_PROBES.map((probe) =>
+      probeTool(exec, probe, input.env, input.signal, input.homeDir, io),
+    ),
   ])
   return {
     platform,

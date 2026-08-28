@@ -14,7 +14,7 @@ Bridge/handler conventions the renderer relies on:
   `backgroundColor` — the sidebar is 220px and semi-transparent; both panes reserve a 52px drag band.
 - Progress events: item-bearing `ProgressEvent`s carry `projectId` for per-project checklists with stable item ids
   (`<projectId>:<step>`); job-level items (`pack`, `encrypt`, `verify`) omit `projectId`. Restore progress expects the
-  `RestorePhase` ids `RESTORE_REPOSITORIES / RESTORE_WORKTREE_STATE / RESTORE_CLAUDE / RESTORE_PROJECT_FILES / VERIFY`.
+  `RestorePhase` ids `RESTORE_REPOSITORIES / RESTORE_PROJECT_FILES / RESTORE_CLAUDE / RESTORE_RUNTIME / VERIFY`.
 - Errors cross the bridge as `IpcEnvelope` values; the preload throws `IpcError` (code, message, hint, details).
 - The complete list of `data-testid`s used by E2E is documented in `docs/renderer/RENDERER.md`.
 - Providers register in this order: git, project-files, claude-code, runtime

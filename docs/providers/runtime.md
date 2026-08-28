@@ -66,21 +66,24 @@ Per project: package manager present/missing (`runtime:<projectId>:pm-missing-<p
 `engines.node` major vs the destination Node (`runtime:<projectId>:node-major` / `node-missing`), and one
 info row per framework.
 
-### Remediation interface (`src/remediation.ts`)
+### Remediation (`@devmig/model`, catalogue in `@devmig/core`)
 
 ```ts
 interface Remediation {
   id: string // e.g. 'install-claude-code'
   title: string
   detail?: string
-  command?: string[] // argv, first element is the executable — display only in v0.1
+  command?: string[] // argv, first element is the executable
+  cwd?: string // working directory for project-level commands
   url?: string
+  network?: boolean // uses the network (installs, logins)
+  interactive?: boolean // needs a terminal (device-flow logins, prompts)
 }
 ```
 
-Remediations are rendered into `AttentionItem.detail` (`Run: gh auth login · See https://…`) and returned
-structured in `ProviderRestoreResult.state.remediations` so a later version can offer to execute them
-without a shell. v0.1 executes nothing.
+Remediations are rendered into `AttentionItem.detail` (`Run: gh auth login · See https://…`) and
+returned structured in `ProviderRestoreResult.state.remediations`. The restore itself still executes
+nothing; the v0.2 bootstrap engine turns them into consent-gated actions.
 
 ## Verify
 

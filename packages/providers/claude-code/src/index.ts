@@ -63,10 +63,12 @@ export {
   assertNoIdentityKeys,
   extractProjectEntries,
   extractUserScope,
+  findMcpSecretHits,
   findProjectEntryKey,
   mergeAddOnly,
   readClaudeJson,
   stripMcpSecrets,
+  type McpSecretHit,
 } from './claude-json'
 export {
   historyRowKey,

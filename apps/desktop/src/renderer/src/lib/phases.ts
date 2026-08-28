@@ -19,6 +19,7 @@ const PHASE_LABELS: Record<string, string> = {
   RESTORE_WORKTREE_STATE: 'Worktree state',
   RESTORE_CLAUDE: 'Claude Code',
   RESTORE_PROJECT_FILES: 'Project files',
+  RESTORE_RUNTIME: 'Development runtime',
   VERIFY: 'Verifying',
   REPORT: 'Report',
   COMPLETE: 'Complete',
@@ -49,9 +50,9 @@ export const RESTORE_PLAN_PHASES = [
 ] as const
 export const RESTORE_RUN_PHASES = [
   'RESTORE_REPOSITORIES',
-  'RESTORE_WORKTREE_STATE',
-  'RESTORE_CLAUDE',
   'RESTORE_PROJECT_FILES',
+  'RESTORE_CLAUDE',
+  'RESTORE_RUNTIME',
   'VERIFY',
 ] as const
 

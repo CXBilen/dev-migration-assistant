@@ -66,4 +66,17 @@ describe('collectDiagnostics', () => {
     expect(again.claudeConfigDirExists).toBe(false)
     expect(again.electronVersion).toBe('44')
   })
+
+  it('reports the directories searched for executables', async () => {
+    const exec = createFakeExec(() => undefined)
+    const { env } = await makeTestEnv(tmp.root, { exec })
+    env.env.PATH = '/opt/homebrew/bin:/usr/bin'
+    const registry = new ProviderRegistry()
+    const diagnostics = await collectDiagnostics(env, registry, {
+      appVersion: '1.2.3',
+      electronVersion: null,
+      logsDirectory: '/logs',
+    })
+    expect(diagnostics.searchPaths).toEqual(['/opt/homebrew/bin', '/usr/bin'])
+  })
 })

@@ -138,6 +138,11 @@ describe('DefaultBackupEngine (integration, fake providers + fake archive)', () 
     })
     expect(manifest.machine.homeDir).toBe(test.homeDir)
     expect(manifest.machine.machineLabel).toBeNull()
+    expect(manifest.capabilities).toMatchObject({ schemaVersion: 1, role: 'source' })
+    expect(manifest.capabilities?.tools.map((t) => t.id)).toEqual(
+      manifest.machine.tools.map((t) => t.id),
+    )
+    expect(manifest.capabilities?.search.paths.length).toBeGreaterThan(0)
     expect(manifest.projects).toHaveLength(1)
     expect(manifest.projects[0]).toMatchObject({
       id: projectId,

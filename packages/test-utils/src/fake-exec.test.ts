@@ -18,6 +18,7 @@ describe('createFakeExec', () => {
       stdoutBuffer: Buffer.from('abc\n'),
       exitCode: 0,
       failed: false,
+      timedOut: false,
       command: 'git rev-parse HEAD',
     })
     const r2 = await fake.exec('git', ['status', '--porcelain=v2'])
