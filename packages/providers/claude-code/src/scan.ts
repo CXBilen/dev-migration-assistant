@@ -221,6 +221,9 @@ export async function scanProject(
   // ---- sessions + memory per match ----
   for (const match of matches) {
     throwIfAborted(ctx.signal)
+    // Directories without a single transcript (e.g. a stale Claude worktree dir that only holds
+    // <session>/tool-results) have nothing to back up; skip them instead of offering "sessions (0)".
+    if (match.sessionCount === 0 && !match.hasMemory) continue
     const includedByDefault = match.confidence !== 'weak'
     if (match.confidence === 'weak') weakMatches += 1
     if (match.kind === 'claude-worktree') worktreeSets += 1
@@ -231,38 +234,39 @@ export async function scanProject(
         : match.kind === 'worktree'
           ? ' · worktree'
           : ' · Claude worktree'
-    artifacts.push(
-      artifact({
-        id: projectArtifactId(project.id, 'sessions', match.dirName),
-        projectId: project.id,
-        scope: 'project',
-        kind: 'file-set',
-        label: `Claude Code sessions (${match.sessionCount})${kindLabel}`,
-        description: `${displayPath(match.matchedProjectPath, ctx.homeDir)} — ${match.confidence} match`,
-        sourcePath: displayPath(match.sourceDirectory, ctx.homeDir),
-        sizeBytes: match.sizeBytes,
-        count: match.sessionCount,
-        sensitivity: 'safe',
-        includedByDefault,
-        reasons: [
-          TRANSCRIPT_REASON,
-          ...(match.confidence === 'weak'
-            ? ['Weak match (name only) — review before including']
-            : []),
-          ...match.evidence,
-        ],
-        meta: {
-          artifactKind: 'sessions',
-          dirName: match.dirName,
-          sourceDirectory: match.sourceDirectory,
-          sourcePath: match.matchedProjectPath,
-          kind: match.kind,
-          confidence: match.confidence,
-          sessionIds: match.sessionIds,
-          claudeVersions: match.claudeVersions,
-        },
-      }),
-    )
+    if (match.sessionCount > 0)
+      artifacts.push(
+        artifact({
+          id: projectArtifactId(project.id, 'sessions', match.dirName),
+          projectId: project.id,
+          scope: 'project',
+          kind: 'file-set',
+          label: `Claude Code sessions (${match.sessionCount})${kindLabel}`,
+          description: `${displayPath(match.matchedProjectPath, ctx.homeDir)} — ${match.confidence} match`,
+          sourcePath: displayPath(match.sourceDirectory, ctx.homeDir),
+          sizeBytes: match.sizeBytes,
+          count: match.sessionCount,
+          sensitivity: 'safe',
+          includedByDefault,
+          reasons: [
+            TRANSCRIPT_REASON,
+            ...(match.confidence === 'weak'
+              ? ['Weak match (name only) — review before including']
+              : []),
+            ...match.evidence,
+          ],
+          meta: {
+            artifactKind: 'sessions',
+            dirName: match.dirName,
+            sourceDirectory: match.sourceDirectory,
+            sourcePath: match.matchedProjectPath,
+            kind: match.kind,
+            confidence: match.confidence,
+            sessionIds: match.sessionIds,
+            claudeVersions: match.claudeVersions,
+          },
+        }),
+      )
     if (match.hasMemory) {
       const memoryDir = path.join(match.sourceDirectory, 'memory')
       const size = await safeDirSize(memoryDir, ctx.signal)

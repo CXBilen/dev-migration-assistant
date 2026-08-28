@@ -24,6 +24,28 @@ export function defaultSelectedIds(scan: ScanSession): Set<string> {
   return ids
 }
 
+export interface SelectEverythingPlan {
+  /** Every selectable artifact (ephemeral ones only when shown). Credentials are never selectable. */
+  ids: Set<string>
+  /** Sensitive artifacts that would be included — the user must acknowledge these first. */
+  sensitive: ScannedArtifact[]
+  /** Weak Claude Code matches that would be included. */
+  weak: ScannedArtifact[]
+}
+
+/** "Select everything": all selectable artifacts, with the items worth a warning listed separately. */
+export function selectEverything(scan: ScanSession, showEphemeral: boolean): SelectEverythingPlan {
+  const plan: SelectEverythingPlan = { ids: new Set(), sensitive: [], weak: [] }
+  for (const a of allArtifacts(scan)) {
+    if (!a.selectable) continue
+    if (a.scope === 'ephemeral' && !showEphemeral) continue
+    plan.ids.add(a.id)
+    if (a.sensitivity === 'sensitive') plan.sensitive.push(a)
+    if (needsReview(a)) plan.weak.push(a)
+  }
+  return plan
+}
+
 export function computeTotals(scan: ScanSession, selected: ReadonlySet<string>): SelectionTotals {
   const totals: SelectionTotals = {
     projects: scan.projects.length,

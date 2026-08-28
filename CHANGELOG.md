@@ -8,6 +8,19 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+### Added
+
+- Backup Review: **Select everything** picks every selectable item at once (sensitive files, weak Claude Code
+  matches, hidden-by-default state when ephemeral items are shown). When that would include sensitive files or
+  weak matches, a confirmation dialog lists them first; credentials are never included.
+
+### Fixed
+
+- Backup failed with `payloadPath "…/claude-code/sessions/<dir>" does not exist in the staging directory` when a
+  Claude Code project directory (typically a stale `.claude/worktrees/…` leftover) contained no transcripts. Such
+  directories are no longer offered as "sessions (0)", and the sessions payload directory is always created even
+  when nothing could be copied.
+
 ## [0.1.0-alpha.5] - 2026-08-28
 
 **First functional build.** The Electron bridge is wired, so Create Backup and Restore Backup now operate on your

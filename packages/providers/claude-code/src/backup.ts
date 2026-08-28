@@ -135,6 +135,9 @@ export async function createBackupArtifacts(
     switch (meta.artifactKind) {
       case 'sessions': {
         const destRel = `${PAYLOAD.sessions}/${assertRelative(meta.dirName, 'directory name')}`
+        // The payload directory must exist even when nothing is copied (no transcripts, or every
+        // transcript disappeared since the scan): the engine validates every payloadPath on disk.
+        await ctx.fs.mkdir(staging(destRel))
         const stats: CopyStats = { files: 0, bytes: 0 }
         const copied: string[] = []
         for (const sid of meta.sessionIds) {

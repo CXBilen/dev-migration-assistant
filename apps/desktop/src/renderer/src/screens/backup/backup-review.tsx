@@ -1,11 +1,13 @@
-import type { ProjectScanResult } from '@devmig/model'
-import { GitBranch } from 'lucide-react'
+import type { ProjectScanResult, ScannedArtifact } from '@devmig/model'
+import { CheckCheck, GitBranch } from 'lucide-react'
+import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { ProviderSection } from '../../components/provider-section'
 import { WarningList } from '../../components/warning-list'
 import { WizardPage } from '../../components/wizard-page'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { Panel, SectionLabel } from '../../components/ui/panel'
 import { PathText } from '../../components/ui/path-text'
 import { useHomeDir } from '../../hooks/use-home-dir'
@@ -13,8 +15,15 @@ import { useShowEphemeral } from '../../hooks/use-prefs'
 import { needsReview, providerLabel, providerRank } from '../../lib/artifacts'
 import { formatBytes, plural } from '../../lib/format'
 import { ROUTES } from '../../lib/routes'
-import { computeTotals, defaultSelectedIds, providerResultsSorted } from '../../lib/totals'
+import {
+  computeTotals,
+  defaultSelectedIds,
+  providerResultsSorted,
+  selectEverything,
+  type SelectEverythingPlan,
+} from '../../lib/totals'
 import { useBackupWizard } from '../../stores/backup-wizard'
+import { SENSITIVE_COPY } from './security-review'
 
 export function BackupReviewScreen(): React.JSX.Element {
   const navigate = useNavigate()
@@ -24,8 +33,18 @@ export function BackupReviewScreen(): React.JSX.Element {
   const selected = useBackupWizard((s) => s.selectedArtifactIds)
   const setArtifactSelected = useBackupWizard((s) => s.setArtifactSelected)
   const setSelection = useBackupWizard((s) => s.setSelection)
+  const [pendingSelectAll, setPendingSelectAll] = useState<SelectEverythingPlan | null>(null)
 
   if (!scan) return <Navigate to={ROUTES.backupProjects} replace />
+
+  const onSelectEverything = (): void => {
+    const plan = selectEverything(scan, showEphemeral)
+    if (plan.sensitive.length === 0 && plan.weak.length === 0) {
+      setSelection(plan.ids)
+      return
+    }
+    setPendingSelectAll(plan)
+  }
 
   const totals = computeTotals(scan, selected)
   const weakCount = scan.projects.flatMap((p) =>
@@ -39,13 +58,19 @@ export function BackupReviewScreen(): React.JSX.Element {
       backTo={ROUTES.backupScan}
       testId="screen-review"
       headerEnd={
-        <Button
-          size="sm"
-          onClick={() => setSelection(defaultSelectedIds(scan))}
-          data-testid="review-reset-defaults"
-        >
-          Reset to defaults
-        </Button>
+        <span className="flex items-center gap-2">
+          <Button size="sm" onClick={onSelectEverything} data-testid="review-select-all">
+            <CheckCheck className="size-3.5" aria-hidden />
+            Select everything
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setSelection(defaultSelectedIds(scan))}
+            data-testid="review-reset-defaults"
+          >
+            Reset to defaults
+          </Button>
+        </span>
       }
       footerStart={
         <span data-testid="review-totals" className="flex flex-wrap gap-x-4 gap-y-1">
@@ -86,6 +111,14 @@ export function BackupReviewScreen(): React.JSX.Element {
         </Button>
       }
     >
+      <SelectEverythingDialog
+        plan={pendingSelectAll}
+        onCancel={() => setPendingSelectAll(null)}
+        onConfirm={() => {
+          if (pendingSelectAll) setSelection(pendingSelectAll.ids)
+          setPendingSelectAll(null)
+        }}
+      />
       <WarningList warnings={scan.warnings} testId="review-warnings" />
       {weakCount > 0 ? (
         <p className="text-[13px] text-fg-muted" data-testid="review-weak-notice">
@@ -133,6 +166,82 @@ export function BackupReviewScreen(): React.JSX.Element {
         </>
       ) : null}
     </WizardPage>
+  )
+}
+
+/**
+ * Shown before "Select everything" takes effect when the selection would include sensitive files
+ * (secrets are only ever written into the encrypted backup) or weak Claude Code matches.
+ */
+function SelectEverythingDialog({
+  plan,
+  onCancel,
+  onConfirm,
+}: {
+  plan: SelectEverythingPlan | null
+  onCancel: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const sensitive = plan?.sensitive ?? []
+  const weak = plan?.weak ?? []
+  return (
+    <ConfirmDialog
+      open={plan !== null}
+      onOpenChange={(open) => {
+        if (!open) onCancel()
+      }}
+      title="Include sensitive items?"
+      description={
+        <div className="flex flex-col gap-3">
+          <p>
+            Selecting everything also includes the items below. {SENSITIVE_COPY} Credentials are
+            never included.
+          </p>
+          {sensitive.length > 0 ? (
+            <WarnGroup title={`Sensitive · ${sensitive.length}`} artifacts={sensitive} />
+          ) : null}
+          {weak.length > 0 ? (
+            <WarnGroup
+              title={`Needs review · ${weak.length}`}
+              artifacts={weak}
+              hint="Claude Code matches that could not be confirmed by transcript evidence."
+            />
+          ) : null}
+        </div>
+      }
+      confirmLabel="Include everything"
+      onConfirm={onConfirm}
+      testId="review-select-all-dialog"
+    />
+  )
+}
+
+function WarnGroup({
+  title,
+  artifacts,
+  hint,
+}: {
+  title: string
+  artifacts: ScannedArtifact[]
+  hint?: string
+}): React.JSX.Element {
+  return (
+    <div>
+      <p className="text-[12px] font-semibold text-fg">{title}</p>
+      {hint ? <p className="text-[12px] text-fg-faint">{hint}</p> : null}
+      <ul className="mt-1 max-h-40 overflow-y-auto rounded-control bg-panel-2 px-3 py-1.5 text-[12.5px] shadow-[0_0_0_1px_var(--border)]">
+        {artifacts.map((a) => (
+          <li key={a.id} className="flex items-baseline justify-between gap-3 py-0.5">
+            <span className="min-w-0 truncate text-fg">{a.label}</span>
+            {a.sizeBytes !== undefined && a.sizeBytes > 0 ? (
+              <span className="shrink-0 font-mono text-[11px] text-fg-muted tabular-nums">
+                {formatBytes(a.sizeBytes)}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

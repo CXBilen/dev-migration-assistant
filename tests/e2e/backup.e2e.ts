@@ -55,6 +55,15 @@ test('full backup: select project → scan → review → security → encrypted
       // The review counts every worktree of the checkout (primary + linked); the manifest counts linked ones only.
       const worktrees = Number(await p.getByTestId('review-total-worktrees').textContent())
       expect(worktrees).toBeGreaterThanOrEqual(1)
+      // "Select everything" warns before including sensitive files; cancelling keeps the defaults.
+      const artifactsBefore = await p.getByTestId('review-total-artifacts').textContent()
+      await p.getByTestId('review-select-all').click()
+      const dialog = p.getByTestId('review-select-all-dialog')
+      await expect(dialog).toBeVisible()
+      await expect(dialog).toContainText('.env.local')
+      await p.getByTestId('review-select-all-dialog-cancel').click()
+      await expect(dialog).toBeHidden()
+      await expect(p.getByTestId('review-total-artifacts')).toHaveText(artifactsBefore ?? '')
       // Nothing secret is rendered on the review screen.
       const text = await p.getByTestId('screen-review').innerText()
       for (const secret of secrets) expect(text).not.toContain(secret)
