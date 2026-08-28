@@ -1,6 +1,6 @@
 {
   "name": "@devmig/desktop",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "private": true,
   "description": "Dev Migration Assistant \u2014 Migration Assistant, but for developers.",
   "productName": "Dev Migration Assistant",

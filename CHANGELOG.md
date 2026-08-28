@@ -8,6 +8,8 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+## [0.1.0-alpha.6] - 2026-08-28
+
 ### Added
 
 - Backup Review: **Select everything** picks every selectable item at once (sensitive files, weak Claude Code
