@@ -647,9 +647,6 @@ export async function restore(
   await run('File history', () =>
     restoreSessionKeyed(state.fileHistory, 'Checkpoint blobs', ctx, book),
   )
-  await run('Session environment', () =>
-    restoreSessionKeyed(state.sessionEnv, 'Session environment', ctx, book),
-  )
   await run('Prompt history', () => restoreHistory(state, ctx, book))
   await run('~/.claude.json project entries', () =>
     restoreProjectClaudeJson(state, plan, ctx, deps, book),

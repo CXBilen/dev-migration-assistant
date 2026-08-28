@@ -383,26 +383,26 @@ export async function planRestore(
         ])
         break
       }
-      case 'file-history':
-      case 'session-env': {
-        const folder = meta.artifactKind === 'file-history' ? 'file-history' : 'session-env'
-        const destRoot = path.join(ctx.claudeConfigDir, folder)
-        const entry = {
+      case 'file-history': {
+        const destRoot = path.join(ctx.claudeConfigDir, 'file-history')
+        state.fileHistory = {
           artifactId: artifact.id,
           payloadPath: artifact.payloadPath,
           destRoot,
           sessionIds: meta.sessionIds ?? [],
         }
-        if (meta.artifactKind === 'file-history') state.fileHistory = entry
-        else state.sessionEnv = entry
         stepFor(
-          folder,
-          meta.artifactKind === 'file-history'
-            ? 'Restore checkpoint blobs (file history)'
-            : 'Restore session environment scripts',
+          'file-history',
+          'Restore checkpoint blobs (file history)',
           destRoot,
           [artifact.id],
           'add-only; existing files are kept',
+        )
+        break
+      }
+      case 'session-env': {
+        warnings.push(
+          'Session environment scripts (session-env/) from this backup are not restored: Claude Code regenerates them and they may contain secrets exported by hooks.',
         )
         break
       }
