@@ -103,7 +103,6 @@ marked unverifiable.
 <staging>/sessions/<dirName>/<sid>.jsonl + <sid>/…
 <staging>/memory/<dirName>/…
 <staging>/file-history/<sid>/…
-<staging>/session-env/<sid>/…
 <staging>/history.jsonl                  (filtered rows, verbatim)
 <staging>/claude-json.json               { projects: { <oldPath>: entry-without-env }, mcpEnv?: { <oldPath>: { <server>: { env, headers } } } }
 <staging>/project-files/<relative path>
@@ -154,8 +153,9 @@ The remap report lists `Claude sessions` (all sessions when the path changed), `
 | global directories (`skills/`, `agents/`, …)                       | `directory-exists`      | merge, skip, backup-then-replace | Merge = add missing files only.                                                                                                                                                 |
 | `~/.claude.json` exists (user scope)                               | `json-entry-exists`     | merge, skip                      | Adds missing MCP servers and config keys; per-server `json-entry-exists` collisions default to skip.                                                                            |
 
-Always add-only, never a collision: `file-history/<sid>`, `session-env/<sid>`, `history.jsonl` (rows deduplicated
-by `(sessionId, timestamp)`; the file is rewritten atomically).
+Always add-only, never a collision: `file-history/<sid>`, `history.jsonl` (rows deduplicated
+by `(sessionId, timestamp)`; the file is rewritten atomically). `session-env/<sid>` is ephemeral (see the
+`session-env` row in the artifact table): it is never captured and never restored.
 
 `<sid>.devmig-conflict.jsonl` files (and the transient `<sid>.devmig-incoming.jsonl`) are never treated as sessions
 by this provider's scanner, so a later backup of the destination does not carry them; resolve them by hand and

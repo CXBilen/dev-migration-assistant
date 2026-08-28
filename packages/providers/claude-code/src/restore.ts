@@ -1,7 +1,8 @@
 /**
  * restore: applies an approved plan through ctx.fs (ScopedFs rooted at the approved destinations).
  * Merge semantics (ADR-0008): sessions add-only by id (identical -> skip, differing -> <id>.devmig-conflict.jsonl),
- * memory/file-history/session-env add-only, history.jsonl append-missing, ~/.claude.json add-only with a backup copy.
+ * memory/file-history add-only, history.jsonl append-missing, ~/.claude.json add-only with a backup copy.
+ * session-env is ephemeral: it is never captured and never restored, only reported as a warning by plan.ts.
  */
 import path from 'node:path'
 import type {
