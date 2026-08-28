@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MigrationError } from '@devmig/shared'
+import { createEnvironment } from '@devmig/core'
+import { MigrationError, noopLogger } from '@devmig/shared'
 import { createFakeExec, matchCommand } from '@devmig/test-utils'
 import {
   assertSafeArg,
@@ -390,6 +391,30 @@ describe('git client', () => {
       GIT_OPTIONAL_LOCKS: '0',
     })
     expect(gitEnvironment({}, false).GIT_OPTIONAL_LOCKS).toBeUndefined()
+  })
+
+  it('overrides the unsafe variables so an Environment-forwarded base env cannot re-introduce them', async () => {
+    // createEnvironment's exec wrapper merges Environment.env underneath every per-call env, so the
+    // unsafe keys must be present-and-undefined in the git env, not absent.
+    const fake = createFakeExec([{ match: matchCommand('git', 'status'), result: { stdout: '' } }])
+    const environment = createEnvironment({
+      logger: noopLogger,
+      homeDir: '/h',
+      env: { PATH: '/usr/bin', HOME: '/h', GIT_DIR: '/evil/.git', GIT_WORK_TREE: '/evil' },
+      exec: fake.exec,
+      augmentSearchPath: false,
+    })
+    const git = createGitClient(environment.exec, { env: environment.env })
+    await git.run(['status', '--porcelain=v2'], { cwd: '/repo' })
+    const childEnv = fake.calls[0]?.options?.env
+    expect(childEnv).toBeDefined()
+    // Present as own keys (so the merge overrides the base env) but undefined (so execa unsets them).
+    expect(Object.keys(childEnv ?? {})).toEqual(
+      expect.arrayContaining(['GIT_DIR', 'GIT_WORK_TREE']),
+    )
+    expect(childEnv?.GIT_DIR).toBeUndefined()
+    expect(childEnv?.GIT_WORK_TREE).toBeUndefined()
+    expect(childEnv?.HOME).toBe('/h')
   })
 
   it('passes argument arrays through the injected Exec with cwd and env', async () => {

@@ -194,6 +194,11 @@ export function installMethodFor(
   const real = realPath || resolvedPath
   const inHome = (p: string): boolean => p === homeDir || p.startsWith(`${homeDir}/`)
   if (real.includes('/.local/share/claude/versions/')) return 'native'
+  // The node_modules tests come first: a global npm/corepack install under a Homebrew or system Node
+  // prefix (`/opt/homebrew/lib/node_modules/…`, `/usr/local/lib/node_modules/…`) is an npm install,
+  // not a brew formula, and Phase B derives repair actions (`npm i -g` vs `brew upgrade`) from this.
+  if (real.includes('/lib/node_modules/corepack/')) return 'corepack'
+  if (real.includes('/lib/node_modules/')) return 'npm-global'
   if (
     real.startsWith('/opt/homebrew/') ||
     real.startsWith('/usr/local/Cellar/') ||
@@ -201,8 +206,6 @@ export function installMethodFor(
     real.startsWith('/home/linuxbrew/')
   )
     return 'homebrew'
-  if (real.includes('/lib/node_modules/corepack/')) return 'corepack'
-  if (real.includes('/lib/node_modules/')) return 'npm-global'
   if (/\/(\.nvm|\.volta|\.asdf|mise|fnm)\//.test(real)) return 'version-manager'
   if (/^\/(usr\/bin|bin|usr\/sbin|sbin|usr\/libexec)\//.test(real)) return 'system'
   if (inHome(resolvedPath) || inHome(real)) return 'manual'

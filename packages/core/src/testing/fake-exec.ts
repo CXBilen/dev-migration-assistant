@@ -8,6 +8,8 @@ export interface FakeExecReply {
   stdout?: string
   stderr?: string
   exitCode?: number
+  /** Scripts a timeout. Like `realExec` (execa kills the child), a timed-out reply is also `failed`. */
+  timedOut?: boolean
 }
 
 export type FakeExecHandler = (
@@ -37,14 +39,15 @@ export function createFakeExec(handler: FakeExecHandler): FakeExec {
     const stdout = reply.stdout ?? ''
     const stderr = reply.stderr ?? ''
     const exitCode = reply.exitCode ?? 0
-    const failed = exitCode !== 0
+    const timedOut = reply.timedOut ?? false
+    const failed = exitCode !== 0 || timedOut
     const result: ExecResult = {
       stdout,
       stderr,
       stdoutBuffer: Buffer.from(stdout, 'utf8'),
       exitCode,
       failed,
-      timedOut: false,
+      timedOut,
       command: [file, ...args].join(' '),
     }
     if (failed && options.reject !== false) {

@@ -178,7 +178,10 @@ export interface CreateGitClientOptions {
   readOnly?: boolean
 }
 
-/** Environment variables that would redirect git away from `cwd`; they are never inherited. */
+/**
+ * Environment variables that would redirect git away from `cwd`; they are never inherited.
+ * They are set to `undefined` rather than deleted (see `gitEnvironment`).
+ */
 const UNSAFE_GIT_ENV = [
   'GIT_DIR',
   'GIT_WORK_TREE',
@@ -195,7 +198,11 @@ export function gitEnvironment(
   readOnly: boolean,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...base }
-  for (const key of UNSAFE_GIT_ENV) delete env[key]
+  // Explicit `undefined`, not `delete`: this map is layered over a wider environment by callers
+  // (`createGitClient` merges per-call entries, `createEnvironment` merges the process env
+  // underneath), and a missing key is re-introduced by such a merge while an `undefined` value
+  // overrides it. Node/execa drop undefined-valued entries when spawning, so the child sees neither.
+  for (const key of UNSAFE_GIT_ENV) env[key] = undefined
   env.GIT_TERMINAL_PROMPT = '0'
   env.GIT_ASKPASS = ''
   env.SSH_ASKPASS = ''

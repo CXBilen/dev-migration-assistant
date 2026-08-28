@@ -172,4 +172,21 @@ describe('installMethodFor', () => {
     ).toBe('manual')
     expect(installMethodFor('/Volumes/Tools/bin/x', '/Volumes/Tools/bin/x', HOME)).toBe('unknown')
   })
+
+  it('classifies node_modules installs under a Homebrew Node prefix by how they were installed', () => {
+    expect(
+      installMethodFor(
+        '/opt/homebrew/bin/claude',
+        '/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js',
+        HOME,
+      ),
+    ).toBe('npm-global')
+    expect(
+      installMethodFor(
+        '/opt/homebrew/bin/pnpm',
+        '/opt/homebrew/lib/node_modules/corepack/dist/pnpm.js',
+        HOME,
+      ),
+    ).toBe('corepack')
+  })
 })
