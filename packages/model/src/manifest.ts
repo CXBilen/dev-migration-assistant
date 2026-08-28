@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ArtifactKind, Sensitivity } from './artifacts'
+import { CapabilitySnapshot } from './capabilities'
 import { ArtifactId, IsoDate, ProjectId, ProviderId } from './ids'
 import { MachineInfo } from './machine'
 import { ProjectGitInfo } from './project'
@@ -69,6 +70,8 @@ export const Manifest = z.object({
   stats: ManifestStats,
   /** Free-form hints for the restore planner (e.g. verified Claude dir-name encoding). No secrets. */
   restoreHints: z.record(z.string(), z.unknown()).default({}),
+  /** Source capability snapshot (v0.2+): tools, integrations, plugins — names only, no secrets. */
+  capabilities: CapabilitySnapshot.optional(),
 })
 export type Manifest = z.infer<typeof Manifest>
 

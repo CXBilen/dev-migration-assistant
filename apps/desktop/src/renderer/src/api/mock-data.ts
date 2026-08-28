@@ -1495,6 +1495,7 @@ export function mockDiagnostics(generatedAt: string): Diagnostics {
     claudeConfigDir: MOCK_CLAUDE_DIR,
     claudeConfigDirExists: true,
     claudeCodeVersion: MOCK_CLAUDE_VERSION,
+    searchPaths: ['/opt/homebrew/bin', '/usr/local/bin', `${MOCK_HOME}/.local/bin`, '/usr/bin'],
     providers: [
       {
         id: 'claude-code',

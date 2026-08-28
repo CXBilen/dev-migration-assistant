@@ -14,6 +14,7 @@ import type { Environment } from './environment'
 import { collectMachineInfo } from './machine/collect-machine-info'
 import type { MigrationProvider } from './providers/contract'
 import type { ProviderRegistry } from './providers/registry'
+import { splitSearchPath } from './search-path'
 
 export interface DiagnosticsInput {
   appVersion: string
@@ -82,6 +83,7 @@ export async function collectDiagnostics(
     claudeConfigDir: env.claudeConfigDir,
     claudeConfigDirExists,
     claudeCodeVersion: claudeTool?.installed ? claudeTool.version : null,
+    searchPaths: splitSearchPath(env.env.PATH),
     providers,
     logsDirectory: input.logsDirectory,
     generatedAt: new Date().toISOString(),
