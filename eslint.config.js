@@ -69,6 +69,38 @@ export default tseslint.config(
           selector: "CallExpression[callee.name='eval']",
           message: 'eval is forbidden.',
         },
+        {
+          selector: "CallExpression[callee.name='execSync']",
+          message: 'execSync runs a shell string. Use Exec(file, args[]) from @devmig/shared.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='child_process'][callee.property.name='execSync']",
+          message: 'execSync runs a shell string. Use Exec(file, args[]) from @devmig/shared.',
+        },
+        {
+          selector:
+            "ImportDeclaration[source.value='child_process'] ImportSpecifier[imported.name='execSync']",
+          message: 'execSync runs a shell string. Use Exec(file, args[]) from @devmig/shared.',
+        },
+        {
+          selector:
+            "ImportDeclaration[source.value='node:child_process'] ImportSpecifier[imported.name='execSync']",
+          message: 'execSync runs a shell string. Use Exec(file, args[]) from @devmig/shared.',
+        },
+        {
+          selector: "Property[key.name='shell'][value.value=true]",
+          message:
+            'shell: true re-introduces shell parsing of arguments. Subprocesses run with shell: false (packages/shared/src/exec.ts:50).',
+        },
+        {
+          selector: "NewExpression[callee.name='Function']",
+          message: 'new Function is dynamic code execution; it is forbidden like eval.',
+        },
+        {
+          selector: "CallExpression[callee.name='Function']",
+          message: 'Function() is dynamic code execution; it is forbidden like eval.',
+        },
       ],
     },
   },

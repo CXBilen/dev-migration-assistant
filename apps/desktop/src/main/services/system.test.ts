@@ -41,7 +41,20 @@ function service(homeDir: string, execCalls: { file: string; args: readonly stri
         electronVersion: input.electronVersion,
         logsDirectory: input.logsDirectory,
         machine: { tools: [], userName: 'alice' },
-        providers: [{ id: 'git', details: { apiKey: 'sk-ant-abcdefghijklmnopqrstuvwxyz' } }],
+        searchPaths: ['/opt/homebrew/bin', '/Users/alice/.local/bin'],
+        providers: [
+          {
+            id: 'git',
+            details: {
+              apiKey: 'sk-ant-abcdefghijklmnopqrstuvwxyz',
+              githubToken: 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+              awsAccessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+              header: 'Authorization: Bearer qrstuvwxyz0123456789abcdefghijkl',
+              envLine: 'DATABASE_PASSWORD=hunter22correcthorse',
+              jwt: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+            },
+          },
+        ],
       }),
     ),
   } as unknown as Pick<CoreServices, 'diagnostics'>
@@ -205,8 +218,19 @@ describe('filesystem probes and OS integration', () => {
       logsDirectory: path.join(tmp, 'logs'),
     })
     expect(mock.clipboard.text).toContain('"appVersion": "1.2.3"')
-    expect(mock.clipboard.text).not.toContain('abcdefghijklmnop')
+    for (const secret of [
+      'abcdefghijklmnop',
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+      'AKIAIOSFODNN7EXAMPLE',
+      'qrstuvwxyz0123456789abcdefghijkl',
+      'hunter22correcthorse',
+      'dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+    ]) {
+      expect(mock.clipboard.text, `leaked ${secret}`).not.toContain(secret)
+    }
     expect(mock.clipboard.text).toContain('[REDACTED]')
+    // Non-secret diagnostics survive redaction.
+    expect(mock.clipboard.text).toContain('/opt/homebrew/bin')
   })
 
   it('openLogs reveals the log file when present and opens the folder otherwise', async () => {
