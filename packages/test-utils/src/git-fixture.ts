@@ -48,6 +48,18 @@ export interface GitRepoFixtureOptions {
   withBinary?: boolean
   /** Write the ignored .env.local with fake secrets (default true). */
   withIgnoredEnv?: boolean
+  /**
+   * Extra files whose names are deliberately hostile (leading `-`, newline, quotes, backslash, an
+   * NFC/NFD pair). Names are written verbatim: `NAME_RE`/`assertRepoName` guards the repository
+   * *directory* name, never file entries, and every git call receives these names as whole argv
+   * elements after a `--` separator, so a leading `-` can never be read as an option.
+   * `ignored` names may not contain a newline (`.gitignore` is line-based).
+   */
+  hostileNames?: {
+    committed?: readonly string[]
+    untracked?: readonly string[]
+    ignored?: readonly string[]
+  }
   /** HOME for the deterministic git environment (default: root). Use the fake home when you have one. */
   homeDir?: string
   exec?: Exec
@@ -106,6 +118,8 @@ export interface GitRepoFixture {
   expected: GitStateSnapshot
   /** Secret values placed in .env.local (empty when withIgnoredEnv is false). */
   secrets: string[]
+  /** Repo-relative POSIX paths written from `hostileNames` (all empty when the option is unused). */
+  hostilePaths: { committed: string[]; untracked: string[]; ignored: string[] }
 }
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$/
@@ -260,6 +274,45 @@ export async function createGitRepoFixture(opts: GitRepoFixtureOptions): Promise
     commits.push(await commitAll(git, repoPath, 'docs: expand readme', 2))
   }
 
+  // Hostile file names (opt-in). Committed and ignored entries get their own commit so the default
+  // fixture's status/count assertions elsewhere are untouched when the option is not used.
+  const hostilePaths = {
+    committed: [] as string[],
+    untracked: [] as string[],
+    ignored: [] as string[],
+  }
+  if (opts.hostileNames) {
+    throwIfAborted(opts.signal)
+    hostilePaths.committed = [...(opts.hostileNames.committed ?? [])]
+    hostilePaths.ignored = [...(opts.hostileNames.ignored ?? [])]
+    for (const name of hostilePaths.ignored) {
+      if (name.includes('\n')) {
+        throw new MigrationError(
+          'INVALID_INPUT',
+          `Ignored fixture name may not contain a newline: ${JSON.stringify(name)}`,
+        )
+      }
+    }
+    for (const name of [...hostilePaths.committed, ...hostilePaths.ignored]) {
+      await writeText(path.join(repoPath, ...name.split('/')), `content of ${name}\n`)
+    }
+    if (hostilePaths.ignored.length > 0) {
+      await writeText(
+        abs(rel.gitignore),
+        `${FIXTURE_GITIGNORE_LINES.join('\n')}\n${hostilePaths.ignored.map((n) => `/${n}`).join('\n')}\n`,
+      )
+    }
+    if (hostilePaths.committed.length > 0) {
+      // `--` first: the names are data, never options.
+      await git(['add', '--', ...hostilePaths.committed], repoPath)
+    }
+    // Only when there is something to record: `git commit` on a clean tree exits 1, and an
+    // untracked-only request leaves the tree clean.
+    if (hostilePaths.committed.length > 0 || hostilePaths.ignored.length > 0) {
+      commits.push(await commitAll(git, repoPath, 'test: files with hostile names', commits.length))
+    }
+  }
+
   // Feature branch with one extra commit, then back to main.
   throwIfAborted(opts.signal)
   assertSafeBranchName(FIXTURE_FEATURE_BRANCH)
@@ -307,6 +360,14 @@ export async function createGitRepoFixture(opts: GitRepoFixtureOptions): Promise
     await writeText(abs(rel.nodeModulesJunk), 'module.exports = {}\n')
   }
 
+  if (opts.hostileNames?.untracked && opts.hostileNames.untracked.length > 0) {
+    throwIfAborted(opts.signal)
+    hostilePaths.untracked = [...opts.hostileNames.untracked]
+    for (const name of hostilePaths.untracked) {
+      await writeText(path.join(repoPath, ...name.split('/')), `content of ${name}\n`)
+    }
+  }
+
   let worktree: GitWorktreeFixture | undefined
   if (withWorktree) {
     const wtFiles: GitWorktreeFixture['files'] = {}
@@ -345,6 +406,7 @@ export async function createGitRepoFixture(opts: GitRepoFixtureOptions): Promise
     exec,
     expected,
     secrets: withIgnoredEnv && withLocalChanges ? Object.values(FIXTURE_ENV_SECRETS) : [],
+    hostilePaths,
   }
   if (worktree) fixture.worktree = worktree
   return fixture
