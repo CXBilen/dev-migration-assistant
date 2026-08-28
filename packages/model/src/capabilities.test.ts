@@ -95,31 +95,32 @@ describe('CapabilitySnapshot', () => {
   })
 })
 
+const base = {
+  format: 'devbackup',
+  formatVersion: 1,
+  id: 'b1',
+  label: 'x',
+  createdAt: '2026-08-28T10:00:00.000Z',
+  appVersion: '0.2.0',
+  machine: {
+    platform: 'darwin',
+    arch: 'arm64',
+    osVersion: null,
+    machineLabel: null,
+    homeDir: '/h',
+    userName: 'u',
+    tools: [],
+    capturedAt: '2026-08-28T10:00:00.000Z',
+  },
+  providers: {},
+  projects: [],
+  global: [],
+  stats: { projectCount: 0, artifactCount: 0, payloadBytes: 0 },
+  restoreHints: {},
+}
+
 describe('additive model changes', () => {
   it('Manifest accepts an optional capabilities field and still parses without it', () => {
-    const base = {
-      format: 'devbackup',
-      formatVersion: 1,
-      id: 'b1',
-      label: 'x',
-      createdAt: '2026-08-28T10:00:00.000Z',
-      appVersion: '0.2.0',
-      machine: {
-        platform: 'darwin',
-        arch: 'arm64',
-        osVersion: null,
-        machineLabel: null,
-        homeDir: '/h',
-        userName: 'u',
-        tools: [],
-        capturedAt: '2026-08-28T10:00:00.000Z',
-      },
-      providers: {},
-      projects: [],
-      global: [],
-      stats: { projectCount: 0, artifactCount: 0, payloadBytes: 0 },
-      restoreHints: {},
-    }
     expect(Manifest.parse(base).capabilities).toBeUndefined()
     expect(Manifest.parse({ ...base, capabilities: snapshot }).capabilities?.role).toBe('source')
   })
@@ -141,5 +142,57 @@ describe('additive model changes', () => {
       Remediation.parse({ id: 'x', title: 'y', cwd: '/p', network: true, interactive: true })
         .interactive,
     ).toBe(true)
+  })
+})
+
+describe('a backup written by a newer app still restores', () => {
+  it('degrades a newer capability snapshot to "not captured" instead of failing the manifest', () => {
+    const parsed = Manifest.safeParse({
+      ...base,
+      capabilities: { ...snapshot, schemaVersion: 2, futureField: { anything: true } },
+    })
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.capabilities).toBeUndefined()
+    // Everything restorable is untouched.
+    expect(parsed.data?.formatVersion).toBe(1)
+    expect(parsed.data?.id).toBe('b1')
+  })
+
+  it('degrades a snapshot carrying an install method this reader does not know', () => {
+    const parsed = Manifest.safeParse({
+      ...base,
+      capabilities: {
+        ...snapshot,
+        tools: [{ ...snapshot.tools[0], installMethod: 'nix-profile' }],
+      },
+    })
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.capabilities).toBeUndefined()
+  })
+
+  it('keeps the rest of machine.tools when one entry has an unknown install method', () => {
+    const parsed = Manifest.parse({
+      ...base,
+      machine: {
+        ...base.machine,
+        tools: [
+          {
+            id: 'claude',
+            label: 'Claude Code',
+            version: '2.1.250',
+            path: '/usr/local/bin/claude',
+            installMethod: 'nix-profile',
+            installed: true,
+          },
+        ],
+      },
+    })
+    expect(parsed.machine.tools[0]?.installMethod).toBeUndefined()
+    expect(parsed.machine.tools[0]?.version).toBe('2.1.250')
+  })
+
+  it('still parses a snapshot this reader does understand, and still rejects a broken manifest', () => {
+    expect(Manifest.parse({ ...base, capabilities: snapshot }).capabilities?.schemaVersion).toBe(1)
+    expect(Manifest.safeParse({ ...base, stats: undefined }).success).toBe(false)
   })
 })

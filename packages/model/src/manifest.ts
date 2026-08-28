@@ -70,8 +70,13 @@ export const Manifest = z.object({
   stats: ManifestStats,
   /** Free-form hints for the restore planner (e.g. verified Claude dir-name encoding). No secrets. */
   restoreHints: z.record(z.string(), z.unknown()).default({}),
-  /** Source capability snapshot (v0.2+): tools, integrations, plugins — names only, no secrets. */
-  capabilities: CapabilitySnapshot.optional(),
+  /**
+   * Source capability snapshot (v0.2+): tools, integrations, plugins — names only, no secrets.
+   * Informational, so it is parsed leniently: a snapshot written by a newer app (a bumped
+   * `schemaVersion`, an enum value this reader does not know) degrades to _not captured_ rather
+   * than failing the whole manifest. Everything restorable lives outside this field.
+   */
+  capabilities: CapabilitySnapshot.optional().catch(undefined),
 })
 export type Manifest = z.infer<typeof Manifest>
 
