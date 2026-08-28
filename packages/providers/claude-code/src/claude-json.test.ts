@@ -4,10 +4,14 @@ import {
   assertNoIdentityKeys,
   extractProjectEntries,
   extractUserScope,
+  findMcpSecretHits,
   findProjectEntryKey,
   mergeAddOnly,
   stripMcpSecrets,
 } from './claude-json'
+
+/** `expect.stringContaining` typed as string so it can sit inside typed matcher objects. */
+const containing = (text: string): string => expect.stringContaining(text) as string
 
 const json = {
   numStartups: 5,
@@ -128,5 +132,34 @@ describe('mergeAddOnly / applyMcpEnv / assertNoIdentityKeys', () => {
     expect(() => assertNoIdentityKeys({ userID: 'u' }, 'x')).toThrow(/userID/)
     expect(() => assertNoIdentityKeys({ machineID: 'm' }, 'x')).toThrow(/machineID/)
     expect(() => assertNoIdentityKeys({ allowedTools: [] }, 'x')).not.toThrow()
+  })
+})
+
+describe('findMcpSecretHits', () => {
+  it('flags secret-looking values in args and urls but not env/headers (handled separately) or placeholders', () => {
+    const hits = findMcpSecretHits({
+      magic: {
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@21st-dev/magic@latest', 'API_KEY=21st_sk_abcdefghijklmnop'],
+      },
+      creds: { type: 'http', url: 'https://alice:hunter2pass@mcp.example.com/mcp' },
+      clean: {
+        type: 'stdio',
+        command: 'uvx',
+        args: ['server', '--token=${MY_TOKEN}', '--api-key'],
+      },
+      plain: { type: 'http', url: 'https://mcp.supabase.com/mcp?project_ref=abc' },
+    })
+    expect(hits.map((h) => h.server).sort()).toEqual(['creds', 'magic'])
+    expect(hits.find((h) => h.server === 'magic')).toMatchObject({
+      path: 'args[2]',
+      reason: containing('Secret-looking'),
+    })
+    expect(hits.find((h) => h.server === 'creds')?.reason).toContain(
+      'URL with embedded credentials',
+    )
+    expect(JSON.stringify(hits)).not.toContain('21st_sk_')
+    expect(JSON.stringify(hits)).not.toContain('hunter2pass')
   })
 })

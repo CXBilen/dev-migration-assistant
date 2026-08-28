@@ -21,7 +21,12 @@ import {
   throwIfAborted,
   walkFiles,
 } from '@devmig/shared'
-import { extractProjectEntries, extractUserScope, readClaudeJson } from './claude-json'
+import {
+  extractProjectEntries,
+  extractUserScope,
+  findMcpSecretHits,
+  readClaudeJson,
+} from './claude-json'
 import { CLAUDE_CODE_PROVIDER_ID, EPHEMERAL_DIRS, MAX_PROJECT_CLAUDE_FILES } from './constants'
 import { isExistingDirectory, isExistingFile, listDirectory, readOptionalJson } from './fs-helpers'
 import { readHistoryRows } from './history'
@@ -31,6 +36,8 @@ import type { ArtifactMeta } from './schema'
 const TRANSCRIPT_REASON =
   'Conversation transcripts are stored in plaintext by Claude Code; the backup is encrypted'
 const MCP_ENV_REASON = 'MCP server environment values may contain tokens'
+const MCP_INLINE_SECRET_REASON =
+  'An MCP server definition carries a secret-looking value outside env/headers (inline arg or URL); review before including'
 const CREDENTIAL_REASON = 'Re-authenticate on the destination Mac'
 
 const SAFE_SUFFIX_RE = /^[A-Za-z0-9._-]{1,120}$/
@@ -376,6 +383,9 @@ export async function scanProject(
     const extracted = extractProjectEntries(json, relatedPaths)
     const entryPaths = Object.keys(extracted.projects)
     if (entryPaths.length > 0) {
+      const inlineHits = Object.values(extracted.projects).flatMap((entry) =>
+        findMcpSecretHits(entry.mcpServers as Record<string, unknown> | undefined),
+      )
       artifacts.push(
         artifact({
           id: projectArtifactId(project.id, 'claude-json:project'),
@@ -388,8 +398,15 @@ export async function scanProject(
           sourcePath: displayPath(ctx.claudeJsonPath, ctx.homeDir),
           sizeBytes: Buffer.byteLength(JSON.stringify(extracted.projects), 'utf8'),
           count: entryPaths.length,
-          sensitivity: 'safe',
-          includedByDefault: true,
+          sensitivity: inlineHits.length > 0 ? 'sensitive' : 'safe',
+          includedByDefault: inlineHits.length === 0,
+          reasons:
+            inlineHits.length > 0
+              ? [
+                  MCP_INLINE_SECRET_REASON,
+                  ...inlineHits.slice(0, 3).map((h) => `${h.server}: ${h.path} — ${h.reason}`),
+                ]
+              : [],
           meta: {
             artifactKind: 'claude-json-project',
             file: ctx.claudeJsonPath,
@@ -718,6 +735,7 @@ export async function scanGlobal(
       const serverNames = Object.keys(user.mcpServers)
       const configKeys = Object.keys(user.config)
       if (serverNames.length > 0 || configKeys.length > 0) {
+        const inlineHits = findMcpSecretHits(user.mcpServers)
         artifacts.push(
           artifact({
             id: globalArtifactId('claude-json:user'),
@@ -736,9 +754,15 @@ export async function scanGlobal(
               JSON.stringify({ mcpServers: user.mcpServers, config: user.config }),
               'utf8',
             ),
-            sensitivity: 'safe',
-            includedByDefault: true,
-            reasons: ['MCP env/headers values are captured separately'],
+            sensitivity: inlineHits.length > 0 ? 'sensitive' : 'safe',
+            includedByDefault: inlineHits.length === 0,
+            reasons:
+              inlineHits.length > 0
+                ? [
+                    MCP_INLINE_SECRET_REASON,
+                    ...inlineHits.slice(0, 3).map((h) => `${h.server}: ${h.path} — ${h.reason}`),
+                  ]
+                : ['MCP env/headers values are captured separately'],
             meta: { artifactKind: 'global-claude-json-user', file: ctx.claudeJsonPath },
           }),
         )
