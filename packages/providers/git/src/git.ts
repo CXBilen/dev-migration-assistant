@@ -9,6 +9,7 @@
  * - read-only invocations disable optional locks so the source repository is never touched.
  */
 import path from 'node:path'
+import { stripRemoteUrlCredentials } from '@devmig/core'
 import type { GitRemoteInfo, GitWorktreeInfo, ProjectGitInfo } from '@devmig/model'
 import {
   MigrationError,
@@ -655,6 +656,7 @@ export function quoteCPath(value: string): string {
   return `${out}"`
 }
 
+// Credentials embedded in remote URLs never reach repository.json (they are restored without them).
 /** Parses `git remote -v`, merging fetch/push lines. */
 export function parseRemotes(text: string): GitRemoteInfo[] {
   const byName = new Map<string, { fetchUrl?: string; pushUrl?: string }>()
@@ -668,8 +670,8 @@ export function parseRemotes(text: string): GitRemoteInfo[] {
     if (!name || !url || !kind) continue
     const entry = byName.get(name) ?? {}
     if (!byName.has(name)) order.push(name)
-    if (kind === 'fetch') entry.fetchUrl = url
-    else entry.pushUrl = url
+    if (kind === 'fetch') entry.fetchUrl = stripRemoteUrlCredentials(url)
+    else entry.pushUrl = stripRemoteUrlCredentials(url)
     byName.set(name, entry)
   }
   const remotes: GitRemoteInfo[] = []

@@ -231,6 +231,26 @@ describe('parseRemotes', () => {
       { name: 'pushonly', fetchUrl: 'ssh://host/x' },
     ])
   })
+
+  it('never keeps credentials embedded in remote urls', () => {
+    const text = [
+      `origin${TAB}https://alice:hunter2@github.com/o/r.git (fetch)`,
+      `origin${TAB}https://alice:hunter2@github.com/o/r.git (push)`,
+      `mirror${TAB}ssh://git:pw@example.com/r.git (fetch)`,
+      `mirror${TAB}ssh://git@example.com/r-push.git (push)`,
+    ].join('\n')
+    const remotes = parseRemotes(text)
+    expect(remotes).toEqual([
+      { name: 'origin', fetchUrl: 'https://github.com/o/r.git' },
+      {
+        name: 'mirror',
+        fetchUrl: 'ssh://git@example.com/r.git',
+        pushUrl: 'ssh://git@example.com/r-push.git',
+      },
+    ])
+    expect(JSON.stringify(remotes)).not.toContain('hunter2')
+    expect(JSON.stringify(remotes)).not.toContain(':pw@')
+  })
 })
 
 describe('parseCountObjects / parseUpstreams / countStashEntries', () => {

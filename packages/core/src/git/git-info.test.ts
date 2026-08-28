@@ -130,6 +130,11 @@ describe('stripRemoteUrlCredentials', () => {
     )
     expect(stripRemoteUrlCredentials('git@github.com:o/r.git')).toBe('git@github.com:o/r.git')
     expect(stripRemoteUrlCredentials('/local/path/repo.git')).toBe('/local/path/repo.git')
+    // more than one "@" before the path: everything up to the last one is userinfo
+    expect(stripRemoteUrlCredentials('https://alice@bob@github.com/o/r.git')).toBe(
+      'https://github.com/o/r.git',
+    )
+    expect(stripRemoteUrlCredentials('ssh://u:p@w@host/r.git')).toBe('ssh://u@host/r.git')
   })
 })
 

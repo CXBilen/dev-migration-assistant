@@ -91,7 +91,9 @@ stripped from the environment.
 3. **Repository** — `mkdir` (0755) through `ScopedFs`, `git init`, point HEAD at the captured branch,
    verify + fetch the bundle (`--update-head-ok` lets the unborn current branch be populated), then
    `reset --hard` (attached) or `checkout --detach <sha>` (detached). Repositories without commits are
-   only initialised. Remotes and upstream configuration are re-created from `repository.json`.
+   only initialised. Remotes and upstream configuration are re-created from `repository.json`. Remote
+   URLs are recorded and restored without embedded credentials (userinfo is stripped from `http(s)`
+   URLs, passwords from other schemes; `ssh://git@host` keeps its user).
 4. **Worktrees** — for each linked worktree whose state artifact was selected: destination =
    `ctx.mapPath(oldPath)` (core derives sibling/child mappings), `git worktree add` (branch, or
    `--detach <sha>`). A branch that is already checked out elsewhere is skipped with a warning.

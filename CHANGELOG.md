@@ -8,6 +8,12 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+### Security
+
+- Git remote URLs are stored without embedded credentials — in the manifest and in the Git provider's
+  `repository.json` — and are restored without them (`https://user:token@…` → `https://…`); sign in again
+  through your credential helper on the destination.
+
 ## [0.1.0-alpha.6] - 2026-08-28
 
 ### Added

@@ -86,7 +86,7 @@ export function parseWorktreeListPorcelain(text: string): ParsedWorktree[] {
   return result
 }
 
-const URL_WITH_USERINFO = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/@]*)@(.*)$/
+const URL_WITH_USERINFO = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/]*)@(.*)$/
 
 /**
  * Removes credentials from a remote URL before it is stored anywhere (manifest, scan, logs).
