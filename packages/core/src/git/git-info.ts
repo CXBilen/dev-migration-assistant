@@ -86,6 +86,25 @@ export function parseWorktreeListPorcelain(text: string): ParsedWorktree[] {
   return result
 }
 
+const URL_WITH_USERINFO = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/@]*)@(.*)$/
+
+/**
+ * Removes credentials from a remote URL before it is stored anywhere (manifest, scan, logs).
+ * http(s): the whole userinfo goes (tokens travel there). Other schemes: only a `:password` part goes;
+ * `ssh://git@host` keeps its user because it is part of the address, not a secret.
+ */
+export function stripRemoteUrlCredentials(url: string): string {
+  const m = URL_WITH_USERINFO.exec(url)
+  if (!m) return url
+  const [, scheme, userinfo, rest] = m
+  if (!scheme || userinfo === undefined || rest === undefined) return url
+  if (/^https?$/i.test(scheme)) return `${scheme}://${rest}`
+  const colon = userinfo.indexOf(':')
+  if (colon === -1) return url
+  const user = userinfo.slice(0, colon)
+  return user ? `${scheme}://${user}@${rest}` : `${scheme}://${rest}`
+}
+
 /** Parses `git remote -v` output, merging the fetch/push lines of each remote. */
 export function parseRemotes(text: string): GitRemoteInfo[] {
   const byName = new Map<string, { fetchUrl?: string; pushUrl?: string }>()
@@ -97,8 +116,8 @@ export function parseRemotes(text: string): GitRemoteInfo[] {
     const [, name, url, kind] = match
     if (!name || !url || !kind) continue
     const entry = byName.get(name) ?? {}
-    if (kind === 'fetch') entry.fetchUrl = url
-    else entry.pushUrl = url
+    if (kind === 'fetch') entry.fetchUrl = stripRemoteUrlCredentials(url)
+    else entry.pushUrl = stripRemoteUrlCredentials(url)
     byName.set(name, entry)
   }
   const remotes: GitRemoteInfo[] = []

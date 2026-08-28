@@ -7,6 +7,7 @@ import {
   parseWorktreeListPorcelain,
   readProjectGitInfo,
   relativeToPrimaryFor,
+  stripRemoteUrlCredentials,
 } from './git-info'
 
 describe('parseWorktreeListPorcelain', () => {
@@ -109,6 +110,48 @@ describe('parseRemotes', () => {
       },
       { name: 'pushonly', fetchUrl: 'ssh://x/y' },
     ])
+  })
+})
+
+describe('stripRemoteUrlCredentials', () => {
+  it('drops userinfo from http(s) urls and passwords from other url schemes; scp-like and ssh users stay', () => {
+    expect(stripRemoteUrlCredentials('https://alice:hunter2@github.com/o/r.git')).toBe(
+      'https://github.com/o/r.git',
+    )
+    expect(stripRemoteUrlCredentials('https://ghp_token123@github.com/o/r')).toBe(
+      'https://github.com/o/r',
+    )
+    expect(stripRemoteUrlCredentials('http://x@host/repo')).toBe('http://host/repo')
+    expect(stripRemoteUrlCredentials('ssh://git@github.com/o/r.git')).toBe(
+      'ssh://git@github.com/o/r.git',
+    )
+    expect(stripRemoteUrlCredentials('ssh://git:pw@github.com/o/r.git')).toBe(
+      'ssh://git@github.com/o/r.git',
+    )
+    expect(stripRemoteUrlCredentials('git@github.com:o/r.git')).toBe('git@github.com:o/r.git')
+    expect(stripRemoteUrlCredentials('/local/path/repo.git')).toBe('/local/path/repo.git')
+  })
+})
+
+describe('parseRemotes', () => {
+  it('never keeps credentials embedded in remote urls', () => {
+    const remotes = parseRemotes(
+      [
+        'origin\thttps://alice:hunter2@github.com/o/r.git (fetch)',
+        'origin\thttps://alice:hunter2@github.com/o/r.git (push)',
+        'mirror\tssh://git:pw@example.com/r.git (fetch)',
+        'mirror\tssh://git@example.com/r-push.git (push)',
+      ].join('\n'),
+    )
+    expect(remotes).toEqual([
+      { name: 'origin', fetchUrl: 'https://github.com/o/r.git' },
+      {
+        name: 'mirror',
+        fetchUrl: 'ssh://git@example.com/r.git',
+        pushUrl: 'ssh://git@example.com/r-push.git',
+      },
+    ])
+    expect(JSON.stringify(remotes)).not.toContain('hunter2')
   })
 })
 
