@@ -45,7 +45,6 @@ import {
   createGitRepoFixture,
   fixtureBinary,
   makeTempRoot,
-  refreshGitFixtureExpectations,
   type GitRepoFixture,
   type TempRoot,
 } from '@devmig/test-utils'
@@ -1126,7 +1125,6 @@ describe('GitProvider round trip: special repositories', () => {
       `#!/bin/sh\necho ran > "${hookMarker}"\n`,
       { mode: 0o755 },
     )
-    await refreshGitFixtureExpectations(fixture, { exec: realExec })
 
     // Record every argv the provider hands to a subprocess.
     const seenArgv: { file: string; args: string[] }[] = []
@@ -1135,6 +1133,9 @@ describe('GitProvider round trip: special repositories', () => {
       return realExec(file, args, options)
     }
 
+    // The pre-migration snapshot is taken here, not through `refreshGitFixtureExpectations`:
+    // nothing below reads `fixture.expected`, and a refresh would re-run the same six git calls
+    // for a value no assertion touches.
     const before = await captureGitState(fixture.path, realExec, { env: fixture.env })
     const project = await describeProject(fixture.path, recording, fixture.env)
     const scanned = await scan(h, project, recording, fixture.env)
