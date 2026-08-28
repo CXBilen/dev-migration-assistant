@@ -226,6 +226,53 @@ export function DiagnosticsScreen(): React.JSX.Element {
         </ul>
       </Panel>
 
+      <SectionLabel className="mt-2">Developer tools</SectionLabel>
+      <Panel padded={false} testId="diag-tools">
+        <ul className="divide-y divide-border px-4">
+          {(d?.machine.tools ?? []).map((t) => (
+            <li
+              key={t.id}
+              className="flex items-start gap-3 py-2.5"
+              data-testid={`diag-tool-${t.id}`}
+            >
+              <StatusIcon status={t.installed ? 'ok' : 'info'} className="mt-0.5" />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13px] font-medium">
+                  {t.label}{' '}
+                  <span className="font-mono text-[11px] font-normal text-fg-faint">
+                    {t.installed ? (t.version ?? 'installed') : 'not installed'}
+                  </span>
+                </span>
+                {t.path ? (
+                  <PathText
+                    path={t.path}
+                    homeDir={homeDir}
+                    className="font-mono text-[11.5px] text-fg-muted"
+                  />
+                ) : null}
+              </div>
+              {t.installMethod ? <Badge tone="neutral">{t.installMethod}</Badge> : null}
+            </li>
+          ))}
+          {!d && diag.loading ? (
+            <li className="py-3 text-[12.5px] text-fg-faint">Loading…</li>
+          ) : null}
+        </ul>
+      </Panel>
+      <Panel
+        title="Search path"
+        description="Directories the app looks in for developer tools. A Finder-launched app does not inherit your shell's PATH, so the well-known locations that exist on this Mac are added."
+        testId="diag-search-path"
+      >
+        <ul className="flex flex-col gap-1 font-mono text-[11.5px] text-fg-muted">
+          {(d?.searchPaths ?? []).map((p) => (
+            <li key={p}>
+              <PathText path={p} homeDir={homeDir} />
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
       <SectionLabel className="mt-2">Verify a backup</SectionLabel>
       <Panel
         title="Check a .devbackup without restoring it"
