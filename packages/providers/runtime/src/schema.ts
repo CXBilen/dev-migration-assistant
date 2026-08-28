@@ -1,7 +1,6 @@
 /** zod schemas for everything the runtime provider reads from disk or from a backup. */
-import { MachineInfo } from '@devmig/model'
+import { MachineInfo, Remediation } from '@devmig/model'
 import { z } from 'zod'
-import { Remediation } from './remediation'
 
 export const PACKAGE_MANAGER_IDS = ['pnpm', 'yarn', 'npm', 'bun'] as const
 export const PackageManagerId = z.enum(PACKAGE_MANAGER_IDS)

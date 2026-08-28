@@ -26,3 +26,6 @@ export { StagingCache, freeSpaceBytes, stagingKeyFor } from './restore/staging-c
 export type { StagingEntry, StagingCacheOptions } from './restore/staging-cache'
 export * from './testing/fake-exec'
 export * from './testing/fake-archive-adapter'
+export * from './capabilities/versions'
+export * from './capabilities/remediation'
+export * from './capabilities/compare'
