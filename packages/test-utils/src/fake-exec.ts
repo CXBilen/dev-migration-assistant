@@ -62,6 +62,7 @@ function materialize(
     stdoutBuffer,
     exitCode,
     failed: partial.failed ?? exitCode !== 0,
+    timedOut: partial.timedOut ?? false,
     command: partial.command ?? [file, ...args].join(' '),
   }
 }

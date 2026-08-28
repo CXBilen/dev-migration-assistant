@@ -44,6 +44,7 @@ export function createFakeExec(handler: FakeExecHandler): FakeExec {
       stdoutBuffer: Buffer.from(stdout, 'utf8'),
       exitCode,
       failed,
+      timedOut: false,
       command: [file, ...args].join(' '),
     }
     if (failed && options.reject !== false) {
