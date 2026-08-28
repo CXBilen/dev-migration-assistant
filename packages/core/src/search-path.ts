@@ -6,6 +6,9 @@
  */
 import { accessSync, constants, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
+import type { InstallMethod } from '@devmig/model'
+
+export type { InstallMethod }
 
 export interface SearchPathIo {
   isDirectory(p: string): boolean
@@ -59,16 +62,6 @@ export const nodeSearchPathIo: SearchPathIo = {
 }
 
 export const LAUNCHD_DEFAULT_PATH = '/usr/bin:/bin:/usr/sbin:/sbin'
-
-export type InstallMethod =
-  | 'native'
-  | 'homebrew'
-  | 'npm-global'
-  | 'corepack'
-  | 'version-manager'
-  | 'system'
-  | 'manual'
-  | 'unknown'
 
 export function splitSearchPath(value: string | undefined): string[] {
   if (!value) return []
