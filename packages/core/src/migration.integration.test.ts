@@ -33,6 +33,7 @@ import { createGitProvider } from '../../providers/git/src/index'
 import { createProjectFilesProvider } from '../../providers/project-files/src/index'
 import { createRuntimeProvider } from '../../providers/runtime/src/index'
 import {
+  FIXTURE_CLAUDE_VERSION,
   FIXTURE_FILE_HISTORY_BLOBS,
   FIXTURE_MCP_SECRET,
   captureGitState,
@@ -291,6 +292,13 @@ describe('Definition of Done: Mac A (alice) → Mac B (bob)', () => {
     expect(manifestA.stats.projectCount).toBe(1)
     expect(manifestA.stats.claudeSessionCount).toBe(source.claude.expectedProjectSessionIds.length)
     expect(manifestA.stats.worktreeCount).toBe(1)
+
+    // Capability snapshot: the real claude-code provider's transcript-writer-version summary
+    // reaches manifest.capabilities.claude.transcriptWriterVersions (spec §5.3 / Task 7).
+    expect(manifestA.capabilities?.role).toBe('source')
+    expect(manifestA.capabilities?.claude.transcriptWriterVersions).toContain(
+      FIXTURE_CLAUDE_VERSION,
+    )
 
     // The source is byte-for-byte unchanged.
     expect(
