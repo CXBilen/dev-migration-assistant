@@ -9,6 +9,7 @@ import {
   type RestoreResult,
   type ScanSession,
 } from '@devmig/model'
+import { walkFiles } from '@devmig/shared'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DefaultBackupEngine } from '../backup/backup-engine'
 import { DefaultMigrationPlanner, defaultSelection } from '../migration/planner'
@@ -49,6 +50,13 @@ interface MachineB {
   files: FakeFileProvider
   registry: ProviderRegistry
   newProject: string
+}
+
+/** Absolute paths of every file under `root` — used to diff the whole destination home. */
+async function treeSnapshot(root: string): Promise<Set<string>> {
+  const out = new Set<string>()
+  for await (const entry of walkFiles(root)) out.add(entry.absolutePath)
+  return out
 }
 
 describe('DefaultRestoreEngine (integration, fake providers + fake archive)', () => {
@@ -468,6 +476,48 @@ describe('DefaultRestoreEngine (integration, fake providers + fake archive)', ()
       b.test.claudeJsonPath,
       `${b.newProject}.devmig-backup-test`,
     ])
+  })
+
+  it('writes no file outside the approved roots and announced aside paths', async () => {
+    // The neighbouring tests assert the roots the engine hands each provider; this one asserts the
+    // literal §5 gate wording: nothing exists outside them after a full, successful restore that
+    // also exercises the backup-then-replace aside path.
+    const b = await machineB({ files: { announceAsidePaths: true } })
+    await writeFiles(b.newProject, { 'notes.txt': 'already here' })
+    const plan = await b.harness.run<RestorePlan>('restore-plan', (ctx) =>
+      b.engine.plan(planRequest(b), ctx),
+    )
+    const collisionId = plan.projects[0]!.collisions[0]!.id
+    const before = await treeSnapshot(b.test.homeDir)
+
+    const result = await b.harness.run<RestoreResult>('restore', (ctx) =>
+      b.engine.execute(
+        { planId: plan.id, collisionDecisions: { [collisionId]: 'backup-then-replace' } },
+        ctx,
+      ),
+    )
+    expect(result.projects[0]!.providers[0]!.status).toBe('ok')
+
+    const after = await treeSnapshot(b.test.homeDir)
+    const added = [...after].filter((p) => !before.has(p))
+    expect(added.length, 'the restore actually wrote something').toBeGreaterThan(0)
+
+    const approvedRoots = [
+      b.newProject,
+      b.test.claudeConfigDir,
+      b.test.claudeJsonPath,
+      ...(b.files.calls.lastRestoreCtx?.fs.roots ?? []),
+    ]
+    for (const file of added) {
+      expect(
+        approvedRoots.some((root) => file === root || file.startsWith(`${root}${path.sep}`)),
+        `${file} must be inside an approved root or an announced aside path`,
+      ).toBe(true)
+    }
+    // The aside root really was in play, so the assertion above is not vacuous.
+    expect(b.files.calls.lastRestoreCtx?.fs.roots).toContain(`${b.newProject}.devmig-backup-test`)
+    await b.engine.cleanup()
+    await b.engine.dispose()
   })
 
   it('skips unknown providers with a warning and honours includeGlobal=false', async () => {
