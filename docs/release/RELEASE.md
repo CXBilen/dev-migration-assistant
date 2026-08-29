@@ -96,7 +96,7 @@ For a locally signed build export the same environment variables as CI before `p
       a fixture project, restore into a different path, `claude --resume` finds the sessions, `git status` matches.
 - [ ] Backups created with the previous release still open (format compatibility).
 - [ ] Tag pushed, workflow green, draft release reviewed, DMG downloaded and Gatekeeper behaviour confirmed
-      (unsigned: right-click → Open works; signed: opens directly).
+      (ad-hoc signed: right-click → Open works; signed and notarized: opens directly).
 - [ ] `pnpm dev` console shows no Electron security warnings (record the Electron version checked).
 - [ ] Publish the release; announce.
 

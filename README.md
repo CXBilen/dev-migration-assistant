@@ -218,15 +218,15 @@ pnpm install          # install the workspace
 pnpm dev              # run the Electron app with hot reload
 pnpm verify           # typecheck + lint + format:check + unit + integration tests + build
 pnpm test:e2e         # Playwright Electron E2E against the built app (pnpm build first, or use pnpm verify:e2e)
-pnpm dist:mac         # unsigned arm64 DMG in apps/desktop/release/
+pnpm dist:mac         # ad-hoc signed arm64 DMG in apps/desktop/release/
 ```
 
 Useful individual scripts: `pnpm typecheck`, `pnpm lint`, `pnpm format`, `pnpm test:unit`, `pnpm test:integration`.
 Integration tests use real `git` in temporary directories and never touch your real `~/.claude` or repositories.
 `pnpm fixture:claude --session <transcript.jsonl> --out fixtures/claude/<name>` turns one of your own transcripts into a
 sanitised, committable fixture (every string redacted, paths and ids remapped; the source is only read).
-Contributor builds are unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`); no Apple credentials are ever needed to work
-on the project.
+Contributor builds are ad-hoc signed (`CSC_IDENTITY_AUTO_DISCOVERY=false` skips auto-discovery of a local Developer
+ID so `after-pack.cjs` ad-hoc signs instead); no Apple credentials are ever needed to work on the project.
 
 ## Architecture
 
