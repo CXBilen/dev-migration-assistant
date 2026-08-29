@@ -8,6 +8,16 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-29
+
+**First stable release.** Everything the app was built for now ships and is covered by the security gate in
+[`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) §5: project scan, encrypted `.devbackup`
+(Argon2id + chunked AES-256-GCM), restore plan with collisions and preflight, safe path remapping, and the
+macOS desktop app with a sandboxed renderer, zod-validated IPC, packaged-build fuses and a startup sweep of
+leftover staging directories. From `1.0.0` the app version follows SemVer strictly and every `1.x` release
+keeps opening containers written by any earlier `1.x`. Builds are ad-hoc signed but not notarized — see the
+install notes in the README.
+
 ### Added
 
 - Every backup now records a **capability snapshot** (`manifest.capabilities`): developer tools with

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { Manifest as ManifestSchema, type BackupResult, type ScanSession } from '@devmig/model'
-import { walkFiles } from '@devmig/shared'
+import { MigrationError, walkFiles } from '@devmig/shared'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DefaultMigrationPlanner, defaultSelection } from '../migration/planner'
 import { ProviderRegistry } from '../providers/registry'
@@ -393,6 +393,39 @@ describe('DefaultBackupEngine (integration, fake providers + fake archive)', () 
         ),
       ),
     ).rejects.toMatchObject({ message: containing('disk exploded') })
+    await expect(fs.stat(outputPath)).rejects.toThrow()
+    expect(await listDir(workDir)).toEqual([])
+  })
+
+  it('fails the job with INTEGRITY_MISMATCH and removes the output when verification rejects', async () => {
+    // The nearest existing case fails at pack time; this one fails in VERIFYING, after the container
+    // was written, which is the phase THREAT_MODEL T6 is about.
+    const failing = new FakeArchiveAdapter({
+      failOn: {
+        verify: () =>
+          new MigrationError('INTEGRITY_MISMATCH', 'checksums.json mismatch for manifest.json'),
+      },
+    })
+    const { engine, scan } = await setup({ archive: failing })
+    const outputPath = path.join(outDir, 'unverified.devbackup')
+    const started = harness.jobs.start('backup', (ctx) =>
+      engine.run(
+        {
+          scanId: scan.id,
+          selectedArtifactIds: defaultSelection(scan),
+          outputPath,
+          password: 'correct horse',
+          label: 'x',
+        },
+        ctx,
+      ),
+    )
+    const final = await harness.jobs.wait(started.id)
+    expect(final.status).toBe('failed')
+    expect(final.error?.code).toBe('INTEGRITY_MISMATCH')
+    // The container was created and then verified — verification is not skippable.
+    expect(failing.calls.map((c) => c.op)).toEqual(['create', 'verify'])
+    // An unverified backup is never left behind, and staging is cleaned either way.
     await expect(fs.stat(outputPath)).rejects.toThrow()
     expect(await listDir(workDir)).toEqual([])
   })

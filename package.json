@@ -1,6 +1,6 @@
 {
   "name": "dev-migration-assistant",
-  "version": "0.1.0-alpha.6",
+  "version": "1.0.0",
   "private": true,
   "description": "Migration Assistant, but for developers. Back up and restore the real local state of your projects \u2014 Claude Code sessions, Git working trees, worktrees and local config \u2014 between Macs.",
   "license": "MIT",
@@ -26,7 +26,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit --project renderer",
     "test:integration": "vitest run --project integration",
-    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts --pass-with-no-tests",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "fixture:claude": "tsx scripts/fixture-claude.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test:unit && pnpm test:integration && pnpm build",
     "verify:e2e": "pnpm build && pnpm test:e2e"

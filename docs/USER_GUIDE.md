@@ -5,11 +5,8 @@ This is the real procedure, end to end, for the situation the app was built for:
 branches, uncommitted changes, worktrees, Claude Code conversations, memory, settings and local config — even
 though the new machine has a different username and you want the projects in a different folder.
 
-> Written against the v0.1 design. Screen names may differ slightly until the UI is final; the phases and the
-> safety guarantees will not. Anything described as "the app checks" or "the app refuses" is enforced in the
-> core engines, not just in the UI. Alpha builds that ship before the Electron bridge to the engines lands run
-> the UI on built-in preview data and show a **Preview data** badge — nothing on the machine is read or written
-> by such a build, so this procedure needs a build without the badge (see `CHANGELOG.md`).
+> Written against the 1.0 release. Anything described as "the app checks" or "the app refuses" is enforced in the
+> core engines, not just in the UI.
 
 **Time needed:** 10–30 minutes of your attention plus copy time. **Network needed:** none for the migration
 itself; only for re-authenticating on the new Mac.
@@ -64,7 +61,7 @@ and the safest fallback is a machine you have not wiped yet.
    - Credentials (Claude OAuth account block, Keychain items, session keys) are **not selectable**. You will
      sign in again on the Mac mini. That is intentional.
 6. **Password and label.** Choose a long passphrase (minimum 8 characters; a sentence you can remember is
-   better than a short random string). **There is no recovery in v0.1** — a forgotten password means an
+   better than a short random string). **There is no password recovery in 1.0** — a forgotten password means an
    unreadable backup. Give the backup a label such as `air-to-mini`.
 7. **Output path.** The app suggests a file name in a sensible folder; save it anywhere you can copy from
    (Desktop is fine).
@@ -108,7 +105,7 @@ can exercise them.
    because Claude Code rewrites `~/.claude.json` and transcripts in the background and could overwrite what
    was just restored.
 3. **GitHub CLI** (if you use it): `brew install gh`. Do not sign in yet; that comes after the restore.
-4. **Dev Migration Assistant.** Install the DMG. v0.1 builds are unsigned, so on first launch use
+4. **Dev Migration Assistant.** Install the DMG. 1.0 builds are ad-hoc signed but not notarized, so on first launch use
    right-click → **Open**, or `xattr -d com.apple.quarantine "/Applications/Dev Migration Assistant.app"`
    (details in the [README](../README.md#install)).
 5. **Decide where projects should live.** For example `~/Code` instead of the Air's `~/Documents/GitHub`. The
@@ -168,7 +165,7 @@ git status                          # same branch, same staged/unstaged/untracke
 git worktree list                   # every worktree, at its new location
 git remote -v                       # origin re-added from the backup metadata
 git log --oneline -3                # history intact (from the bundle; no network needed)
-git stash list                      # expected to be empty: stashes are not migrated in v0.1
+git stash list                      # expected to be empty: stashes are not migrated in 1.0
 ```
 
 Then Claude Code:
@@ -223,13 +220,13 @@ file is the pre-restore state.
 ## 7. Troubleshooting
 
 **"Dev Migration Assistant can't be opened because Apple cannot check it for malicious software."**
-Expected for v0.1 (unsigned). Right-click the app → Open, or remove the quarantine attribute — see
+Expected for 1.0 (not notarized). Right-click the app → Open, or remove the quarantine attribute — see
 [README → Install](../README.md#install). On macOS 15+ you may instead need System Settings → Privacy & Security
 → **Open Anyway** after the first refusal.
 
 **Wrong password (`ARCHIVE_AUTH_FAILED`).**
 The password is exactly what you typed on the Air (Unicode is NFC-normalised, so composed/decomposed accents
-do not matter, but keyboard layout and Caps Lock do). There is no recovery key in v0.1. If the password is
+do not matter, but keyboard layout and Caps Lock do). There is no recovery key in 1.0. If the password is
 lost, the backup cannot be opened; create a new one on the source Mac.
 
 **"Backup file is corrupt / truncated" (`INTEGRITY_MISMATCH`, `ARCHIVE_INVALID`).**
@@ -241,7 +238,7 @@ bad chunk and writes nothing. A backup created with a newer app version than the
 Quit every Claude Code session (including ones started by editor extensions or `claude -p` scripts) and
 re-plan. `pgrep -fl claude` shows what is still running. The check reads Claude Code's live session registry
 under `~/.claude/sessions/` and probes each recorded pid; a stale entry after a crash is ignored once its
-process is gone. In v0.1 the check is a warning, not a hard stop — do not proceed while it shows a pid.
+process is gone. In 1.0 the check is a warning, not a hard stop — do not proceed while it shows a pid.
 
 **Preflight: `git` not found (`GIT_NOT_INSTALLED`).**
 Install the Command Line Tools (`xcode-select --install`) or Homebrew git, restart the app, re-plan.

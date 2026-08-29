@@ -4,16 +4,31 @@ This roadmap describes intent, not commitments. Items move between releases as w
 Provider additions follow the process in [`docs/providers/AUTHORING.md`](providers/AUTHORING.md) and are the
 easiest place to contribute.
 
-## v0.1 — the core loop (current)
+## 1.0 — the core loop (current)
 
-- macOS 13+, Apple Silicon, unsigned DMG.
+- macOS 13+, Apple Silicon, ad-hoc signed DMG (not notarized).
 - Providers: Claude Code, Git, project files, runtime facts.
 - Encrypted `.devbackup` (Argon2id + chunked AES-256-GCM), streaming everywhere, hardened extraction.
 - Restore plan with collisions, preflight, path-remap report; write only through `ScopedFs`.
 - Metadata-driven Claude Code project matching; schema-owned path rewriting only.
+- Deterministic search-path resolution (launchd PATH + `/etc/paths(.d)` + well-known user tool dirs); every `Exec`
+  call receives it. No login shell is spawned.
+- Capability snapshot in the manifest (`manifest.capabilities`): tool versions, resolved paths and install method,
+  plus the Claude Code versions that wrote the transcripts — names and paths only.
+- Secret-hygiene fixes: MCP `args`/`url` secrets classified sensitive, `session-env/` never migrated, credentials
+  stripped from git remote URLs.
+- Electron main/preload bridge, typed zod-validated IPC, packaged-build fuses, startup sweep of leftover staging
+  directories, Playwright E2E suite.
 - Definition of done: fake Mac A → fake Mac B with a changed username and project path, `claude --resume` works.
 
-## v0.2 — more tools, smoother installs
+## 1.1 — Rehydrate: post-restore bootstrap
+
+- **Post-Restore Bootstrap Engine** — turns "restore completed" into "development environment ready": consent-gated,
+  terminal-hosted remediation actions built from the capability snapshot (install missing tools, re-authenticate,
+  reinstall plugins). Credentials are still never captured or migrated; the app proposes, the user approves, nothing
+  runs silently.
+
+## 1.2 — more tools, smoother installs
 
 **Providers**
 
@@ -39,12 +54,12 @@ easiest place to contribute.
 
 **Quality and safety**
 
-- Blocking `CLAUDE_RUNNING` preflight (v0.1 warns) and a startup sweep of leftover staging directories.
-- Larger E2E matrix: collision policies, cancellation, wrong password, tampered file.
+- Blocking `CLAUDE_RUNNING` preflight (1.0 and 1.1 warn — the Rehydrate spec keeps it a warning through 1.1).
+- Larger E2E matrix: collision policies and a tampered backup file.
 - More committed fixtures from `pnpm fixture:claude` (sanitised transcripts covering worktree sessions, `/cd`,
   subagents).
 
-## v0.3 — the rest of the machine
+## 1.3 — the rest of the machine
 
 - **Homebrew** provider: `Brewfile`-style manifest (formulae, casks, taps) captured on backup; on restore the app
   shows what is missing and offers the `brew bundle` command — never installs silently.
@@ -56,7 +71,7 @@ easiest place to contribute.
 - Selective restore of individual sessions; search inside a backup's manifest.
 - Scheduled/incremental backups (append-only session deltas).
 
-## v1.0 — Mac → Mac direct transfer
+## 2.0 — Mac → Mac direct transfer
 
 - **Direct transfer** between two Macs on the same network or via Thunderbolt/USB-C: the source streams the
   encrypted payload to the destination app, which plans and restores on the fly — no intermediate file, same
@@ -64,7 +79,7 @@ easiest place to contribute.
 - Pairing with a short code shown on both screens; mutual authentication; no cloud relay.
 - Windows/Linux **restore** of the container (read-only tooling) if demand exists; full cross-platform providers
   are out of scope until path semantics are settled.
-- Stable `formatVersion`, documented compatibility policy, signed releases as the default.
+- Stable `formatVersion` and a documented compatibility policy (signed releases are already the default from 1.2).
 
 ## Explicitly not planned
 

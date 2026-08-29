@@ -409,10 +409,22 @@ describe('threat model and limitations keep their validation placeholders honest
     ]) {
       expect(tm, `threat row: ${threat}`).toContain(threat)
     }
-    expect(tm).toContain('to be validated by the security gate')
+    // The phrase stays legal in the legend, which defines it, and in the §5 checklist, but no *row*
+    // may still carry the placeholder once a release is tagged. The legend sits under the same `## 4.`
+    // heading as the table, so scope the check to the rows rather than to the whole section.
+    const section = tm.slice(
+      tm.indexOf('## 4. Threat table'),
+      tm.indexOf('## 5. Security gate checklist'),
+    )
+    const firstRow = section.indexOf('\n| #')
+    expect(firstRow, 'the threat table header row is present').toBeGreaterThan(0)
+    expect(
+      section.slice(firstRow),
+      'no unvalidated mitigation may remain in the threat table',
+    ).not.toContain('<to be validated by the security gate>')
   })
 
-  it('KNOWN_LIMITATIONS lists the v0.1 gaps the ADRs imply', async () => {
+  it('KNOWN_LIMITATIONS lists the 1.0 gaps the ADRs imply', async () => {
     const kl = await readText('docs/KNOWN_LIMITATIONS.md')
     for (const phrase of [
       'Submodules',

@@ -168,6 +168,45 @@ jobs:
             xcrun stapler validate "$app"
           fi
 
+      # Runs for both the unsigned and the signed path: the fuses are flipped by electron-builder
+      # after packaging and before signing, so a packaged app is the only place they can be read back.
+      #
+      # Colour discipline, belt and braces. @electron/fuses prints each row through chalk as
+      # `  <yellow>Name</> is <red>Disabled</>`; chalk 4 drops colour on a non-TTY stdout only when
+      # FORCE_COLOR is unset, and this workflow sets FORCE_COLOR: '1' at the top level. Left alone,
+      # every row would arrive as "\e[33mRunAsNode\e[39m is \e[31mDisabled\e[39m" and all five
+      # plain-text greps below would miss, failing the job on every release build. So:
+      #   1. the step-level env overrides the workflow-level FORCE_COLOR and adds NO_COLOR, and
+      #   2. the sed strips any CSI escape that still survives, so a future chalk/tooling change
+      #      (or a colour flag we do not control) cannot silently break the check again.
+      - name: Read back the packaged Electron fuses (ADR-0007)
+        env:
+          FORCE_COLOR: '0'
+          NO_COLOR: '1'
+        run: |
+          set -o pipefail
+          app="apps/desktop/release/mac-arm64/Dev Migration Assistant.app"
+          # printf builds a literal ESC byte; BSD sed on the macOS runner cannot be relied on to
+          # expand a \x1b escape inside the pattern.
+          esc=$(printf '\033')
+          npx --yes @electron/fuses@1.8.0 read --app "$app" \
+            | sed -E "s/${esc}\[[0-9;]*[A-Za-z]//g" \
+            | tee fuses.txt
+          fail=0
+          for expected in \
+            "RunAsNode is Disabled" \
+            "EnableNodeOptionsEnvironmentVariable is Disabled" \
+            "EnableNodeCliInspectArguments is Disabled" \
+            "OnlyLoadAppFromAsar is Enabled" \
+            "EnableEmbeddedAsarIntegrityValidation is Enabled"; do
+            if ! grep -qF "$expected" fuses.txt; then
+              echo "::error title=Fuse mismatch::expected \"$expected\""
+              fail=1
+            fi
+          done
+          rm -f fuses.txt
+          exit "$fail"
+
       - name: Remove decoded API key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8" apps/desktop/electron-builder.ci-signed.yml

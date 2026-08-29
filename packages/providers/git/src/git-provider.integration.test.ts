@@ -1092,4 +1092,135 @@ describe('GitProvider round trip: special repositories', () => {
       restore(h, planned, backed.payloadRoot, [destination], realExec, repo.env),
     ).rejects.toBeInstanceOf(MigrationError)
   })
+
+  it('round-trips hostile file and branch names without executing them', async () => {
+    const source = path.join(h.tmp.root, 'src')
+    await fs.mkdir(source)
+    // Escapes, not literals: an editor or formatter that normalises the source file would silently
+    // collapse the pair into two identical names and the assertion below would prove nothing.
+    const nfc = 'caf\u00e9.txt' // precomposed: LATIN SMALL LETTER E WITH ACUTE
+    const nfd = 'cafe\u0301.txt' // decomposed: 'e' + COMBINING ACUTE ACCENT
+    const committed = ['-rf.txt', 'qu"ote\'.txt', 'back\\slash.txt', nfc, nfd]
+    const untracked = ['line\nbreak.txt']
+    const ignored = ['-ignored-secret.txt']
+    const hostileBranch = 'feat/weird--name'
+    const fixture = await createGitRepoFixture({
+      root: source,
+      name: 'hostile',
+      homeDir: h.tmp.root,
+      withWorktree: false,
+      withBinary: false,
+      withIgnoredEnv: false,
+      hostileNames: { committed, untracked, ignored },
+    })
+    expect(fixture.hostilePaths).toEqual({ committed, untracked, ignored })
+    // No leading '-', so it can never be read as an option; still one whole argv element.
+    await fixture.exec('git', ['branch', hostileBranch], { cwd: fixture.path })
+    // A hook in the SOURCE repository must never run during scan, backup or restore.
+    const hookMarker = path.join(h.tmp.root, 'HOSTILE_HOOK_RAN')
+    const hooksDir = path.join(fixture.path, '.git', 'hooks')
+    await fs.mkdir(hooksDir, { recursive: true })
+    await fs.writeFile(
+      path.join(hooksDir, 'post-checkout'),
+      `#!/bin/sh\necho ran > "${hookMarker}"\n`,
+      { mode: 0o755 },
+    )
+
+    // Record every argv the provider hands to a subprocess.
+    const seenArgv: { file: string; args: string[] }[] = []
+    const recording: Exec = (file, args, options) => {
+      seenArgv.push({ file, args: [...args] })
+      return realExec(file, args, options)
+    }
+
+    // The pre-migration snapshot is taken here, not through `refreshGitFixtureExpectations`:
+    // nothing below reads `fixture.expected`, and a refresh would re-run the same six git calls
+    // for a value no assertion touches.
+    const before = await captureGitState(fixture.path, realExec, { env: fixture.env })
+    const project = await describeProject(fixture.path, recording, fixture.env)
+    const scanned = await scan(h, project, recording, fixture.env)
+    expect(scanned.detected).toBe(true)
+    const selected = defaultSelection(scanned)
+    const backed = await backup(h, project, scanned, selected, recording, fixture.env)
+    const destination = path.join(h.tmp.root, 'dest', 'hostile')
+    await fs.mkdir(destination, { recursive: true })
+    const mappings = [{ projectId: project.id, oldPath: fixture.path, newPath: destination }]
+    const planned = await plan(
+      h,
+      backed.payloadRoot,
+      project,
+      backed.artifacts,
+      selected,
+      mappings,
+      recording,
+      fixture.env,
+    )
+    expect(planned.plan.preflight.filter((c) => c.status === 'fail')).toEqual([])
+    const { result, verifyCtx } = await restore(
+      h,
+      planned,
+      backed.payloadRoot,
+      [destination],
+      recording,
+      fixture.env,
+    )
+    expect(result.status).toBe('ok')
+    expect(result.items.filter((i) => i.status === 'error')).toEqual([])
+    const verification = await verify(h, planned, result, verifyCtx)
+    expect(verification.checks.filter((c) => c.status !== 'pass')).toEqual([])
+
+    // Byte-identical content at every hostile path the source really had.
+    const sourceNames = await fs.readdir(fixture.path)
+    const restoredNames = await fs.readdir(destination)
+    // Every name but the NFC/NFD pair must really be on disk, or the loop below proves nothing.
+    for (const name of [...committed, ...untracked].filter((n) => n.normalize('NFC') !== nfc)) {
+      expect(sourceNames, `source ${JSON.stringify(name)}`).toContain(name)
+    }
+    for (const name of [...committed, ...untracked]) {
+      if (!sourceNames.includes(name)) continue // see the NFC/NFD assertion below
+      expect(restoredNames, `restored ${JSON.stringify(name)}`).toContain(name)
+      expect(await fs.readFile(path.join(destination, name))).toEqual(
+        await fs.readFile(path.join(fixture.path, name)),
+      )
+    }
+    // The NFC/NFD pair either produced two entries or the filesystem folded them into one. Both are
+    // acceptable; what is not acceptable is the restore producing a different set than the source.
+    const cafeSource = sourceNames.filter((n) => n.normalize('NFC') === nfc).sort()
+    const cafeRestored = restoredNames.filter((n) => n.normalize('NFC') === nfc).sort()
+    expect(cafeSource.length, 'the NFC/NFD pair produced no entry at all').toBeGreaterThan(0)
+    expect(cafeRestored).toEqual(cafeSource)
+    // Ignored entries belong to the project-files provider and are not restored by git.
+    expect(restoredNames).not.toContain(ignored[0])
+
+    // Logical git state is equivalent, and the hostile branch travelled in the bundle.
+    const restored = await captureGitState(destination, realExec, { env: fixture.env })
+    expect(compareGitState(before, restored)).toEqual({ equal: true, differences: [] })
+    const destExec = bindExecEnv(realExec, fixture.env)
+    const refAt = async (cwd: string): Promise<string> =>
+      (
+        await destExec('git', ['rev-parse', '--verify', `refs/heads/${hostileBranch}`], { cwd })
+      ).stdout.trim()
+    expect(await refAt(destination)).toBe(await refAt(fixture.path))
+
+    // No hook ran, on either side.
+    expect(await exists(hookMarker)).toBe(false)
+
+    // Option-injection guard: a name starting with '-' may only appear after a `--` separator.
+    for (const call of seenArgv) {
+      for (const [i, arg] of call.args.entries()) {
+        if (!arg.startsWith('-') || (arg !== '-rf.txt' && arg !== ignored[0])) continue
+        expect(
+          call.args.slice(0, i),
+          `${call.file} ${JSON.stringify(call.args)} passes ${arg} without a -- separator`,
+        ).toContain('--')
+      }
+    }
+    // That loop is a guard for future changes, and today it is deliberately empty: the provider
+    // never names a working-tree file on a command line at all (bundle + diffs + `status -z`;
+    // untracked files are copied through Node fs), so no hostile name ever reaches argv. Pinned
+    // here so the loop above cannot go quietly vacuous if that ever stops being true.
+    expect(seenArgv.filter((c) => c.args.some((a) => a === '-rf.txt' || a === ignored[0]))).toEqual(
+      [],
+    )
+  })
 })
