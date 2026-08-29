@@ -168,6 +168,27 @@ jobs:
             xcrun stapler validate "$app"
           fi
 
+      # Runs for both the unsigned and the signed path: the fuses are flipped by electron-builder
+      # after packaging and before signing, so a packaged app is the only place they can be read back.
+      - name: Read back the packaged Electron fuses (ADR-0007)
+        run: |
+          app="apps/desktop/release/mac-arm64/Dev Migration Assistant.app"
+          npx --yes @electron/fuses@1.8.0 read --app "$app" | tee fuses.txt
+          fail=0
+          for expected in \
+            "RunAsNode is Disabled" \
+            "EnableNodeOptionsEnvironmentVariable is Disabled" \
+            "EnableNodeCliInspectArguments is Disabled" \
+            "OnlyLoadAppFromAsar is Enabled" \
+            "EnableEmbeddedAsarIntegrityValidation is Enabled"; do
+            if ! grep -qF "$expected" fuses.txt; then
+              echo "::error title=Fuse mismatch::expected \"$expected\""
+              fail=1
+            fi
+          done
+          rm -f fuses.txt
+          exit "$fail"
+
       - name: Remove decoded API key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8" apps/desktop/electron-builder.ci-signed.yml
