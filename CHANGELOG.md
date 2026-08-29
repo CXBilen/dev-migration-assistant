@@ -8,7 +8,7 @@ Three things are versioned independently: the application (`package.json`), the 
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-08-28
+## [1.0.0] - 2026-08-29
 
 **First stable release.** Everything the app was built for now ships and is covered by the security gate in
 [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) §5: project scan, encrypted `.devbackup`
