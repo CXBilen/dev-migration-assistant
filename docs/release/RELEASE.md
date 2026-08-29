@@ -13,8 +13,8 @@ Rules of thumb:
 - A new provider, a new artifact kind, or a new optional manifest field does **not** bump `formatVersion` — zod
   schemas tolerate additive fields.
 - Changing the meaning of an existing manifest field, the tar entry order, or the crypto construction does.
-- App versions before `1.0.0` may bump the minor for breaking UI/CLI changes; the container format must remain
-  readable across `0.x` releases once `0.1.0` ships.
+- From `1.0.0` the app version follows SemVer strictly: breaking UI/CLI changes bump the major. Every `1.x`
+  reader must keep opening containers written by any earlier `1.x`.
 
 ## 2. CHANGELOG discipline
 
@@ -64,12 +64,13 @@ Rules of thumb:
    signed/notarized. A maintainer reviews the notes, pastes the `CHANGELOG.md` section, and publishes.
 
 Fuses (`RunAsNode` off, `EnableNodeOptionsEnvironmentVariable` off, `EnableNodeCliInspectArguments` off,
-`OnlyLoadAppFromAsar` on — ADR-0007) are flipped by electron-builder after packaging and before signing **once the
-`electronFuses` block is declared in `apps/desktop/electron-builder.yml`** (pending; see the security gate in
-[`docs/security/THREAT_MODEL.md`](../security/THREAT_MODEL.md) §5). Verify a release build with
-`npx @electron/fuses read --app "apps/desktop/release/mac-arm64/Dev Migration Assistant.app"`.
+`OnlyLoadAppFromAsar` on — ADR-0007) are flipped by electron-builder after packaging and before signing; the
+`electronFuses` block is declared in `apps/desktop/electron-builder.yml` (all nine fuses are tabulated in
+[ADR-0007](../architecture/adr/0007-electron-security-posture.md)). Verify a release build with
+`npx @electron/fuses read --app "apps/desktop/release/mac-arm64/Dev Migration Assistant.app"`; `release.yml` runs
+the same read-back on every tag build.
 
-Pre-release versions (`0.1.0-alpha.1`, `0.1.0-beta.2`, …) follow the same procedure; the tag is `v0.1.0-alpha.1`
+Pre-release versions (`1.1.0-alpha.1`, `1.1.0-beta.2`, …) follow the same procedure; the tag is `v1.1.0-alpha.1`
 and the draft release should be marked as a pre-release by the maintainer before publishing.
 
 ### Local equivalent
@@ -86,17 +87,17 @@ For a locally signed build export the same environment variables as CI before `p
 
 - [ ] `CHANGELOG.md` section for the version is complete and mentions any `formatVersion`/`schemaVersion` bump.
 - [ ] `version` matches in `package.json` and `apps/desktop/package.json`.
-- [ ] `pnpm verify` and `pnpm verify:e2e` green on CI for the release commit (the E2E job fails while
-      `tests/e2e` has no `*.e2e.ts` files — Playwright exits non-zero on "no tests found").
+- [ ] `pnpm verify` and `pnpm verify:e2e` green on CI for the release commit.
 - [ ] Security gate in [`docs/security/THREAT_MODEL.md`](../security/THREAT_MODEL.md) §5 walked through; no
       `<to be validated by the security gate>` placeholders left for shipped behaviour; `electronFuses` declared and
       read back from the packaged app.
 - [ ] `docs/KNOWN_LIMITATIONS.md` reflects what actually ships.
-- [ ] Manual smoke test on a clean macOS user account: install DMG (unsigned flow from the README), create a backup of
+- [ ] Manual smoke test on a clean macOS user account: install DMG (ad-hoc-signed flow from the README), create a backup of
       a fixture project, restore into a different path, `claude --resume` finds the sessions, `git status` matches.
 - [ ] Backups created with the previous release still open (format compatibility).
 - [ ] Tag pushed, workflow green, draft release reviewed, DMG downloaded and Gatekeeper behaviour confirmed
       (unsigned: right-click → Open works; signed: opens directly).
+- [ ] `pnpm dev` console shows no Electron security warnings (record the Electron version checked).
 - [ ] Publish the release; announce.
 
 ## 5. Hotfix releases

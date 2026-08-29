@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/CXBilen/dev-migration-assistant/actions/workflows/ci.yml"><img src="https://github.com/CXBilen/dev-migration-assistant/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/CXBilen/dev-migration-assistant/releases"><img src="https://img.shields.io/github/v/release/CXBilen/dev-migration-assistant?include_prereleases&label=release" alt="Latest release" /></a>
+  <a href="https://github.com/CXBilen/dev-migration-assistant/releases"><img src="https://img.shields.io/github/v/release/CXBilen/dev-migration-assistant?label=release" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license" /></a>
   <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-000000?logo=apple&logoColor=white" alt="macOS 13+ Apple Silicon" />
   <img src="https://img.shields.io/badge/local--only-no%20cloud%20%C2%B7%20no%20telemetry-2ea44f" alt="Local only" />
@@ -29,9 +29,9 @@ project location changes.
   </picture>
 </p>
 
-> **Status:** v0.1.0-alpha (pre-release) · macOS 13+ · Apple Silicon · local-only, no accounts, no telemetry.
-> The `0.1.0-alpha.1` build is a UI preview on built-in data: it shows a **Preview data** badge and reads or writes
-> nothing on your machine. The bridge to the engines lands in the next alpha — see [`CHANGELOG.md`](CHANGELOG.md).
+> **Status:** 1.0.0 · macOS 13+ · Apple Silicon · local-only, no accounts, no telemetry.
+> Create Backup and Restore Backup operate on your real projects and Claude Code data — read-only during backup,
+> and restore writes only to the destinations you approve.
 
 <p align="center">
   <img src="docs/assets/screenshots/home.png" alt="Home screen: Create Backup and Restore Backup" width="49%" />
@@ -41,7 +41,7 @@ project location changes.
   <img src="docs/assets/screenshots/restore.png" alt="Restore wizard, step 1 of 6: open a .devbackup file" width="49%" />
   <img src="docs/assets/screenshots/diagnostics.png" alt="Diagnostics screen: app, Claude Code and provider status" width="49%" />
 </p>
-<p align="center"><sub>Alpha screenshots.</sub></p>
+<p align="center"><sub>Screenshots from a development build.</sub></p>
 
 **In 30 seconds**
 
@@ -168,21 +168,21 @@ can read or run.
 
 ## Status
 
-**v0.1** targets macOS on Apple Silicon. Provider status:
+**1.0** targets macOS on Apple Silicon. Provider status:
 
 | Provider      | Status  | Notes                                                                                     |
 | ------------- | ------- | ----------------------------------------------------------------------------------------- |
-| Claude Code   | ✓ v0.1  | Sessions, memory, settings, `CLAUDE.md`, MCP config, history, checkpoints; safe remapping |
-| Git           | ✓ v0.1  | Bundle + staged/unstaged/untracked/binary deltas; worktrees rebuilt; remotes re-added     |
-| Project files | ✓ v0.1  | Env files and local config, classified; sensitive items opt-in                            |
-| Runtime       | ✓ v0.1  | Tool versions recorded in `machine.json`; restore report lists what to install            |
-| Codex CLI     | planned | v0.2 — see [roadmap](docs/ROADMAP.md)                                                     |
-| Cursor        | planned | v0.2                                                                                      |
-| VS Code       | planned | v0.2                                                                                      |
-| Ghostty       | planned | after v0.2                                                                                |
-| Homebrew      | planned | v0.3 (Brewfile-style manifest, reinstall on destination)                                  |
+| Claude Code   | ✓ 1.0   | Sessions, memory, settings, `CLAUDE.md`, MCP config, history, checkpoints; safe remapping |
+| Git           | ✓ 1.0   | Bundle + staged/unstaged/untracked/binary deltas; worktrees rebuilt; remotes re-added     |
+| Project files | ✓ 1.0   | Env files and local config, classified; sensitive items opt-in                            |
+| Runtime       | ✓ 1.0   | Tool versions recorded in `machine.json`; restore report lists what to install            |
+| Codex CLI     | planned | 1.2 — see [roadmap](docs/ROADMAP.md)                                                      |
+| Cursor        | planned | 1.2                                                                                       |
+| VS Code       | planned | 1.2                                                                                       |
+| Ghostty       | planned | 1.3                                                                                       |
+| Homebrew      | planned | 1.3 (Brewfile-style manifest, reinstall on destination)                                   |
 
-Known gaps for v0.1 are tracked honestly in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+Known gaps for 1.0 are tracked honestly in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
 
 ## Requirements
 
@@ -195,14 +195,14 @@ Known gaps for v0.1 are tracked honestly in [`docs/KNOWN_LIMITATIONS.md`](docs/K
 1. Download the latest `Dev Migration Assistant-<version>-arm64.dmg` from
    [Releases](https://github.com/CXBilen/dev-migration-assistant/releases).
 2. Open the DMG and drag **Dev Migration Assistant** to `/Applications`.
-3. **Alpha builds are ad-hoc signed, not notarized.** On first launch macOS says it cannot verify the developer:
+3. **Release builds are ad-hoc signed, not notarized.** On first launch macOS says it cannot verify the developer:
    click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (macOS 15+),
    or right-click the app in Finder and choose **Open** (macOS 13/14). Alternatively remove the quarantine attribute:
    ```sh
    xattr -dr com.apple.quarantine "/Applications/Dev Migration Assistant.app"
    ```
-   If macOS reports the app as **"damaged and can't be opened"**, the download lost its signature (very early alpha
-   builds were completely unsigned) — the `xattr` command above fixes that too.
+   If macOS reports the app as **"damaged and can't be opened"**, the download lost its signature — the `xattr`
+   command above fixes that too.
    Signed and notarized releases are planned (see [`docs/release/RELEASE.md`](docs/release/RELEASE.md)). If you would
    rather not trust a downloaded binary, build it yourself with `pnpm dist:mac` (below).
 
@@ -287,8 +287,8 @@ logger), `packages/archive` (the container), `packages/core` (provider contract,
 | [Threat model](docs/security/THREAT_MODEL.md)              | Assets, trust boundaries, attacker models, threat → mitigation table                          |
 | [Provider authoring](docs/providers/AUTHORING.md)          | How to add a provider (with a `CodexProvider` skeleton)                                       |
 | [Release process](docs/release/RELEASE.md)                 | Versioning, changelog, release workflow, signing                                              |
-| [Roadmap](docs/ROADMAP.md)                                 | v0.2 / v0.3 / v1 scope                                                                        |
-| [Known limitations](docs/KNOWN_LIMITATIONS.md)             | What v0.1 does not do                                                                         |
+| [Roadmap](docs/ROADMAP.md)                                 | 1.1 / 1.2 / 1.3 / 2.0 scope                                                                   |
+| [Known limitations](docs/KNOWN_LIMITATIONS.md)             | What 1.0 does not do                                                                          |
 | [Research notes](docs/research/)                           | Claude Code storage, container crypto, Electron security                                      |
 
 ## Contributing
